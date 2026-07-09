@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 
 const PASSCODE_COOKIE = '__Secure-recalldeck-auth';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const passcode = process.env.DEMO_PASSCODE;
 
   // If no passcode is configured, allow all access
@@ -11,7 +11,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Skip middleware for static assets and the passcode API
+  // Skip proxy for static assets and the passcode API
   const { pathname } = request.nextUrl;
   if (
     pathname.startsWith('/_next') ||
