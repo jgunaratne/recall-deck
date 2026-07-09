@@ -203,7 +203,7 @@ export default function GeminiLiveOverlay({
       sentQuizRef.current = null;
       setCharacterName(config.characterName ?? null);
 
-      session.connect({
+      await session.connect({
         apiKey: config.apiKey,
         systemInstruction: config.systemInstruction,
         voice: config.voice,
@@ -239,13 +239,8 @@ export default function GeminiLiveOverlay({
     }
   }, []);
 
-  // ── Auto-connect when first card content arrives ───────────────────────────
-
-  useEffect(() => {
-    if (currentCardContent && status === 'idle') {
-      connect();
-    }
-  }, [currentCardContent, status, connect]);
+  // (Removed auto-connect — the session starts only when the user clicks the
+  // audio icon, matching the "click to turn on" UX.)
 
   // ── Seed card content as context before the conversation starts ───────────
   // Gemini 3.1 Live only accepts `clientContent` context while seeding the
@@ -358,9 +353,8 @@ export default function GeminiLiveOverlay({
     };
   }, [disconnect]);
 
-  // ── Don't render if no content ─────────────────────────────────────────────
-
-  if (status === 'idle' && !currentCardContent) return null;
+  // The parent (Message.tsx) only mounts this component when `topic` and
+  // `isLastMessage` are truthy, so we always render the audio icon here.
 
   return (
     <div className="gemini-live-bar flex items-center gap-1.5">

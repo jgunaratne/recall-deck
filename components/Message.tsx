@@ -450,10 +450,16 @@ export default function Message({
         <div className="flex flex-col rounded-lg bg-surface shadow-input">
           {/* Card header / progress indicator */}
           <div className="flex items-center justify-between px-5 pt-4">
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
-                Lecture notes
-              </span>
+            <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
+              Lecture notes
+            </span>
+            <div className="flex items-center gap-2.5 text-xs tabular-nums text-text-tertiary">
+              {isStreaming && isLastMessage && !isLast && (
+                <span className="flex items-center gap-1.5 text-accent">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                  Writing
+                </span>
+              )}
               {/* Voice tutor lives on the latest lecture only — one Live
                   session at a time, following the newest cards. */}
               {topic && isLastMessage && (
@@ -466,16 +472,8 @@ export default function Message({
                   allCards={blocks}
                 />
               )}
+              {blocks.length > 1 && <span>{safeIndex + 1} of {blocks.length}</span>}
             </div>
-            <span className="flex items-center gap-2.5 text-xs tabular-nums text-text-tertiary">
-              {isStreaming && isLastMessage && !isLast && (
-                <span className="flex items-center gap-1.5 text-accent">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                  Writing
-                </span>
-              )}
-              {blocks.length > 1 && `${safeIndex + 1} of ${blocks.length}`}
-            </span>
           </div>
 
           {/* Card content */}
