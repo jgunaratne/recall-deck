@@ -103,6 +103,14 @@ export default function GeminiLiveOverlay({
   const readCardsRef = useRef<Set<string>>(new Set());
   const sentQuizRef = useRef<string | null>(null);
   const hasKickedOffRef = useRef(false);
+  // Synchronous connect guard — the `status` state is stale within a render
+  // pass, so rapid effect re-runs (e.g. while cards stream in) would
+  // otherwise open a second parallel session and orphan the first.
+  const connectInFlightRef = useRef(false);
+  // Monotonic attempt id — disconnect() bumps it so a connect whose config
+  // fetch was still in flight (StrictMode remount, fast unmount) bails out
+  // instead of opening an orphaned second session.
+  const connectAttemptRef = useRef(0);
 
   // Track mounted state to prevent state updates after unmount
   const mountedRef = useRef(true);
@@ -114,7 +122,10 @@ export default function GeminiLiveOverlay({
   // ── Connect to Gemini Live ─────────────────────────────────────────────────
 
   const connect = useCallback(async () => {
+    if (connectInFlightRef.current) return;
     if (status === 'connecting' || status === 'connected') return;
+    connectInFlightRef.current = true;
+    const attempt = ++connectAttemptRef.current;
 
     setStatus('connecting');
     setError(null);
@@ -139,6 +150,10 @@ export default function GeminiLiveOverlay({
         import('@/lib/audio-player'),
       ]);
 
+      // A disconnect (or newer connect) superseded this attempt while we
+      // were awaiting — abandon it rather than open an orphaned session.
+      if (attempt !== connectAttemptRef.current) return;
+
       // Create audio player
       const player = new AudioPlayer();
       player.onPlaybackStart = () => {
@@ -152,6 +167,9 @@ export default function GeminiLiveOverlay({
       // Create session
       const session = new GeminiLiveSession({
         onStatusChange: (s) => {
+          if (s === 'error' || s === 'idle') {
+            connectInFlightRef.current = false;
+          }
           if (!mountedRef.current) return;
           setStatus(s);
           if (s === 'error') {
@@ -191,6 +209,7 @@ export default function GeminiLiveOverlay({
         voice: config.voice,
       });
     } catch (err) {
+      connectInFlightRef.current = false;
       if (mountedRef.current) {
         setError(err instanceof Error ? err.message : 'Failed to connect');
         setStatus('error');
@@ -201,6 +220,8 @@ export default function GeminiLiveOverlay({
   // ── Disconnect ─────────────────────────────────────────────────────────────
 
   const disconnect = useCallback(() => {
+    connectInFlightRef.current = false;
+    connectAttemptRef.current += 1;
     sessionRef.current?.disconnect();
     sessionRef.current = null;
     recorderRef.current?.stop();
