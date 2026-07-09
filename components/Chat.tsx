@@ -5,6 +5,7 @@ import Message from './Message';
 import QuizTakeover from './QuizTakeover';
 import Sidebar from './Sidebar';
 import { splitIntoCards } from '@/lib/cards';
+import { pickTopics, type Topic } from '@/lib/topics';
 import { READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
 import {
   type ChatMessage,
@@ -19,20 +20,6 @@ import {
   upsertConversation,
 } from '@/lib/history';
 
-const SEED_PROMPTS = [
-  {
-    label: 'Grasp statistics',
-    prompt: 'Explain confidence intervals in simple terms',
-  },
-  {
-    label: 'Picture the math',
-    prompt: 'What are vectors in geometry and how do they work?',
-  },
-  {
-    label: 'Peek under the hood',
-    prompt: 'Why do databases use B-Trees for indexing?',
-  },
-];
 
 function getTimeOfDay() {
   const hour = new Date().getHours();
@@ -69,6 +56,26 @@ function MenuIcon() {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M8 16H3v5" />
+    </svg>
+  );
+}
+
 function SparkMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
@@ -92,6 +99,7 @@ export default function Chat() {
   const [showQuizButton, setShowQuizButton] = useState(false);
   const [quizSource, setQuizSource] = useState<QuizSource | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [visibleTopics, setVisibleTopics] = useState<Topic[]>([]);
 
   // Conversation history (localStorage-backed external store)
   const conversations = useSyncExternalStore(
@@ -102,8 +110,7 @@ export default function Chat() {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   // Sidebar
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -128,13 +135,16 @@ export default function Chat() {
       .catch((err) => console.error('Failed to load providers:', err));
   }, []);
 
-  // Restore the saved reading level after mount (deferred so hydration
-  // renders the same default the server did).
+  // Restore saved reading level + pick topics after mount (deferred so
+  // hydration renders the same stable default the server did).
   useEffect(() => {
     const timer = setTimeout(() => {
       const saved = localStorage.getItem('recalldeck_reading_level') as ReadingLevel | null;
       if (saved && READING_LEVELS.includes(saved)) {
         setReadingLevel(saved);
+        setVisibleTopics(pickTopics(saved));
+      } else {
+        setVisibleTopics(pickTopics('high'));
       }
     }, 0);
     return () => clearTimeout(timer);
@@ -148,6 +158,7 @@ export default function Chat() {
   const handleReadingLevelChange = (level: ReadingLevel) => {
     setReadingLevel(level);
     localStorage.setItem('recalldeck_reading_level', level);
+    setVisibleTopics(pickTopics(level));
   };
 
   // Auto-scroll: always on a newly sent/received message, but during
@@ -326,6 +337,10 @@ export default function Chat() {
 
   const handleQuizClose = () => {
     setQuizSource(null);
+    setMessages([]);
+    setActiveId(null);
+    setShowQuizButton(false);
+    setError(null);
   };
 
   const handleNewChat = () => {
@@ -334,7 +349,7 @@ export default function Chat() {
     setActiveId(null);
     setShowQuizButton(false);
     setError(null);
-    setMobileSidebarOpen(false);
+    setSidebarOpen(false);
   };
 
   const handleSelectConversation = (conversation: Conversation) => {
@@ -344,7 +359,7 @@ export default function Chat() {
     const last = conversation.messages[conversation.messages.length - 1];
     setShowQuizButton(!!last && last.role === 'assistant' && last.content.length > 100);
     setError(null);
-    setMobileSidebarOpen(false);
+    setSidebarOpen(false);
   };
 
   const handleDeleteConversation = (id: string) => {
@@ -419,13 +434,11 @@ export default function Chat() {
         <Sidebar
           conversations={conversations}
           activeId={activeId}
-          collapsed={sidebarCollapsed}
-          mobileOpen={mobileSidebarOpen}
+          open={sidebarOpen}
           providers={availableProviders}
           provider={provider}
           readingLevel={readingLevel}
-          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
-          onCloseMobile={() => setMobileSidebarOpen(false)}
+          onClose={() => setSidebarOpen(false)}
           onNewChat={handleNewChat}
           onSelect={handleSelectConversation}
           onDelete={handleDeleteConversation}
@@ -434,16 +447,14 @@ export default function Chat() {
         />
 
         <div
-          className={`flex h-dvh min-w-0 flex-1 flex-col transition-[margin] duration-200 ${
-            sidebarCollapsed ? 'md:ml-[var(--sidebar-width-collapsed)]' : 'md:ml-[var(--sidebar-width)]'
-          }`}
+          className="flex h-dvh min-w-0 flex-1 flex-col"
         >
           {/* Header */}
           <header className="sticky top-0 z-20 flex h-[var(--header-height)] shrink-0 items-center justify-between bg-page px-4">
-            <div className="flex items-center gap-2 md:hidden">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setMobileSidebarOpen(true)}
+                onClick={() => setSidebarOpen(true)}
                 aria-label="Open sidebar"
                 className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md
                   text-text-secondary transition-colors hover:bg-state-hover"
@@ -452,14 +463,6 @@ export default function Chat() {
               </button>
               <SparkMark className="h-4 w-4 text-accent" />
               <span className="font-serif text-lg text-text-primary">Recall Deck</span>
-            </div>
-            <div className="hidden items-center gap-2 px-2 md:flex">
-              {sidebarCollapsed && (
-                <>
-                  <SparkMark className="h-4 w-4 text-accent" />
-                  <span className="font-serif text-lg text-text-primary">Recall Deck</span>
-                </>
-              )}
             </div>
             <span className="hidden text-xs text-text-tertiary sm:block">
               Active recall, one pop quiz at a time
@@ -477,23 +480,37 @@ export default function Chat() {
                 <span suppressHydrationWarning>{getTimeOfDay()}, learner</span>
               </div>
 
-              <div className="grid w-full max-w-[var(--input-max-width)] grid-cols-1 gap-2 sm:grid-cols-3">
-                {SEED_PROMPTS.map((seed, idx) => (
+              <div className="w-full max-w-[var(--input-max-width)]">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {visibleTopics.map((seed, idx) => (
+                    <button
+                      key={`${seed.label}-${idx}`}
+                      id={`seed-prompt-${idx}`}
+                      type="button"
+                      onClick={() => sendMessage(seed.prompt)}
+                      className="group flex cursor-pointer flex-col gap-1 rounded-lg border border-border-soft
+                        bg-surface p-3 text-left transition-colors
+                        hover:border-border-subtle hover:bg-state-hover"
+                    >
+                      <span className="text-sm font-medium text-text-primary">{seed.label}</span>
+                      <span className="line-clamp-2 text-xs leading-snug text-text-tertiary">
+                        {seed.prompt}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 flex justify-center">
                   <button
-                    key={idx}
-                    id={`seed-prompt-${idx}`}
                     type="button"
-                    onClick={() => sendMessage(seed.prompt)}
-                    className="group flex cursor-pointer flex-col gap-1 rounded-lg border border-border-soft
-                      bg-surface p-3 text-left transition-colors
-                      hover:border-border-subtle hover:bg-state-hover"
+                    onClick={() => setVisibleTopics(pickTopics(readingLevel))}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-full border border-border-soft
+                      bg-surface px-4 py-1.5 text-xs font-medium text-text-secondary
+                      transition-colors hover:border-border-subtle hover:bg-state-hover"
                   >
-                    <span className="text-sm font-medium text-text-primary">{seed.label}</span>
-                    <span className="line-clamp-2 text-xs leading-snug text-text-tertiary">
-                      {seed.prompt}
-                    </span>
+                    <RefreshIcon />
+                    More topics
                   </button>
-                ))}
+                </div>
               </div>
 
               <div className="w-full max-w-[var(--input-max-width)]">
@@ -545,6 +562,7 @@ export default function Chat() {
           readingLevel={readingLevel}
           onClose={handleQuizClose}
           onComplete={handleQuizComplete}
+          onOpenSidebar={() => setSidebarOpen(true)}
         />
       )}
     </>

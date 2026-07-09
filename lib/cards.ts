@@ -30,12 +30,12 @@ export function splitIntoCards(content: string): string[] {
 
     // Split on empty lines outside of code blocks if we reached the target length
     if (!inCodeBlock && trimmed.length === 0) {
-      if (currentLength > 1000) {
+      if (currentLength > 500) {
         flushCard();
       }
     }
   }
 
   flushCard();
-  return cards;
+  return cards.filter((c) => c.length > 0);
 }

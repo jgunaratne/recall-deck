@@ -231,6 +231,36 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
                 );
               }
 
+              // Header 6
+              if (trimmed.startsWith('###### ')) {
+                return (
+                  <h6 key={lIdx} className="mt-2 text-sm font-semibold text-text-primary">
+                    {parseInline(trimmed.slice(7))}
+                    {lineCursor && <StreamCursor />}
+                  </h6>
+                );
+              }
+
+              // Header 5
+              if (trimmed.startsWith('##### ')) {
+                return (
+                  <h5 key={lIdx} className="mt-2 text-sm font-semibold text-text-primary">
+                    {parseInline(trimmed.slice(6))}
+                    {lineCursor && <StreamCursor />}
+                  </h5>
+                );
+              }
+
+              // Header 4
+              if (trimmed.startsWith('#### ')) {
+                return (
+                  <h4 key={lIdx} className="mt-3 text-[15px] font-semibold text-text-primary">
+                    {parseInline(trimmed.slice(5))}
+                    {lineCursor && <StreamCursor />}
+                  </h4>
+                );
+              }
+
               // Header 3
               if (trimmed.startsWith('### ')) {
                 return (
@@ -356,7 +386,37 @@ export default function Message({
   // Next button reflect newly arrived cards).
 
   if (!isUser) {
-    if (blocks.length === 0) return null;
+    // Show a loading card while waiting for the first streaming chunk
+    if (blocks.length === 0) {
+      if (isStreaming && isLastMessage) {
+        return (
+          <div className="mt-6 w-full animate-fade-in">
+            <div className="flex flex-col rounded-lg bg-surface shadow-input">
+              <div className="flex items-center justify-between px-5 pt-4">
+                <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
+                  Lecture notes
+                </span>
+              </div>
+              <div className="flex min-h-[120px] items-center justify-center px-5 py-6">
+                <div className="flex items-center gap-3 text-sm text-text-tertiary">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    style={{ animation: 'spin 1s linear infinite', animationDelay: `${-(Date.now() % 1000)}ms` }}
+                  >
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.2" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                  <span>Preparing lecture notes…</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      return null;
+    }
 
     const safeIndex = Math.min(currentIndex, blocks.length - 1);
     const currentBlock = blocks[safeIndex];

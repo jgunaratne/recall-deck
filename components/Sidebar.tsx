@@ -35,7 +35,7 @@ function ReadingLevelSlider({
     <div>
       <div className="mb-1 flex items-center justify-between px-1">
         <span className="text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
-          Reading level
+          Education level
         </span>
         <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
           {READING_LEVEL_LABELS[value]}
@@ -67,13 +67,13 @@ function ReadingLevelSlider({
           step={1}
           value={index}
           onChange={(e) => onChange(READING_LEVELS[parseInt(e.target.value, 10)])}
-          aria-label="Reading level"
+          aria-label="Education level"
           aria-valuetext={READING_LEVEL_LABELS[value]}
           className={`relative z-10 block w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB_CLASSES}`}
         />
       </div>
       <div className="flex justify-between px-1 text-[10px] uppercase tracking-wider text-text-tertiary">
-        <span>Middle</span>
+        <span>Elementary</span>
         <span>University</span>
       </div>
     </div>
@@ -221,13 +221,11 @@ function SidebarItem({ conversation, active, onSelect, onDelete }: SidebarItemPr
 type SidebarProps = {
   conversations: Conversation[];
   activeId: string | null;
-  collapsed: boolean;
-  mobileOpen: boolean;
+  open: boolean;
   providers: string[];
   provider: string;
   readingLevel: ReadingLevel;
-  onToggleCollapse: () => void;
-  onCloseMobile: () => void;
+  onClose: () => void;
   onNewChat: () => void;
   onSelect: (conversation: Conversation) => void;
   onDelete: (id: string) => void;
@@ -238,13 +236,11 @@ type SidebarProps = {
 export default function Sidebar({
   conversations,
   activeId,
-  collapsed,
-  mobileOpen,
+  open,
   providers,
   provider,
   readingLevel,
-  onToggleCollapse,
-  onCloseMobile,
+  onClose,
   onNewChat,
   onSelect,
   onDelete,
@@ -253,29 +249,26 @@ export default function Sidebar({
 }: SidebarProps) {
   return (
     <>
-      {/* Mobile backdrop */}
-      {mobileOpen && (
+      {/* Backdrop */}
+      {open && (
         <div
-          className="fixed inset-0 z-30 bg-black/20 md:hidden"
-          onClick={onCloseMobile}
+          className="fixed inset-0 z-[60] bg-black/20"
+          onClick={onClose}
           aria-hidden
         />
       )}
 
       <nav
         aria-label="Sidebar"
-        data-collapsed={collapsed || undefined}
-        className={`group/sidebar fixed left-0 top-0 z-40 flex h-dvh w-[var(--sidebar-width)] flex-col
+        className={`group/sidebar fixed left-0 top-0 z-[70] flex h-dvh w-[var(--sidebar-width)] flex-col
           border-r-[0.5px] border-border-subtle bg-page
           bg-gradient-to-t from-[rgba(245,244,237,0.05)] to-[rgba(245,244,237,0.3)]
           transition-transform duration-200
-          md:transition-[width] md:duration-200
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:translate-x-0 md:data-[collapsed]:w-[var(--sidebar-width-collapsed)]`}
+          ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        {/* Header: wordmark + collapse toggle */}
+        {/* Header: wordmark + close toggle */}
         <div className="flex w-full items-center justify-between p-2">
-          <span className="flex h-8 items-center gap-2 overflow-hidden whitespace-nowrap pl-2 font-serif text-lg text-text-primary group-data-[collapsed]/sidebar:md:hidden">
+          <span className="flex h-8 items-center gap-2 overflow-hidden whitespace-nowrap pl-2 font-serif text-lg text-text-primary">
             <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden>
               <path d="M12 2c.6 4.8 1.9 7.4 4 9 1.5 1.1 3.4 1.7 6 2-2.6.3-4.5.9-6 2-2.1 1.6-3.4 4.2-4 9-.6-4.8-1.9-7.4-4-9-1.5-1.1-3.4-1.7-6-2 2.6-.3 4.5-.9 6-2 2.1-1.6 3.4-4.2 4-9z" />
             </svg>
@@ -283,19 +276,10 @@ export default function Sidebar({
           </span>
           <button
             type="button"
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
-            className="hidden h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md
-              text-text-secondary transition-colors hover:bg-state-hover md:flex"
-          >
-            <PanelLeftIcon />
-          </button>
-          <button
-            type="button"
-            onClick={onCloseMobile}
+            onClick={onClose}
             aria-label="Close sidebar"
             className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md
-              text-text-secondary transition-colors hover:bg-state-hover md:hidden"
+              text-text-secondary transition-colors hover:bg-state-hover"
           >
             <PanelLeftIcon />
           </button>
@@ -308,16 +292,15 @@ export default function Sidebar({
             onClick={onNewChat}
             title="New chat"
             className="flex h-8 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm text-text-secondary
-              transition-colors hover:bg-state-hover
-              group-data-[collapsed]/sidebar:md:w-8 group-data-[collapsed]/sidebar:md:justify-center group-data-[collapsed]/sidebar:md:px-0"
+              transition-colors hover:bg-state-hover"
           >
             <span className="text-text-primary"><PlusIcon /></span>
-            <span className="grow truncate text-left leading-5 group-data-[collapsed]/sidebar:md:hidden">New chat</span>
+            <span className="grow truncate text-left leading-5">New chat</span>
           </button>
         </div>
 
         {/* Recents */}
-        <div className="mt-5 flex grow flex-col overflow-y-auto px-2 group-data-[collapsed]/sidebar:md:hidden">
+        <div className="mt-5 flex grow flex-col overflow-y-auto px-2">
           {conversations.length > 0 ? (
             <>
               <div className="truncate px-2 pb-1.5 text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
@@ -343,7 +326,7 @@ export default function Sidebar({
         </div>
 
         {/* Settings: reading level + engine */}
-        <div className="flex flex-col gap-4 border-t-[0.5px] border-border-subtle p-3 group-data-[collapsed]/sidebar:md:hidden">
+        <div className="flex flex-col gap-4 border-t-[0.5px] border-border-subtle p-3">
           <ReadingLevelSlider value={readingLevel} onChange={onReadingLevelChange} />
 
           {providers.length > 0 && (
