@@ -197,8 +197,8 @@ export default function D3Block({ code, className }: D3BlockProps) {
   if (error && !svg) {
     return (
       <div className={`my-2 ${className || ''}`}>
-        <div className="bg-slate-50 border border-slate-200 overflow-x-auto rounded-xl p-4">
-          <div className="text-[#20252D]/60 mb-2 flex items-center gap-2 text-xs font-medium font-mono">
+        <div className="overflow-x-auto rounded-lg border border-border-soft bg-state-hover-soft p-4">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-text-tertiary">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <line x1="12" y1="8" x2="12" y2="12" />
@@ -208,7 +208,7 @@ export default function D3Block({ code, className }: D3BlockProps) {
             <button
               type="button"
               onClick={handleRefresh}
-              className="text-[#20252D]/60 hover:text-[#20252D] ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors hover:bg-black/5 cursor-pointer font-mono font-bold"
+              className="ml-auto flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium text-text-tertiary transition-colors hover:bg-state-hover hover:text-text-primary"
               title="Retry rendering"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -217,10 +217,10 @@ export default function D3Block({ code, className }: D3BlockProps) {
               Retry
             </button>
           </div>
-          <div className="text-[#C53030] mb-2 text-xs font-mono">{error}</div>
-          <details className="text-[#20252D]/60 text-xs">
-            <summary className="cursor-pointer font-mono">Show code</summary>
-            <pre className="font-mono mt-1 text-xs leading-relaxed whitespace-pre-wrap text-[#20252D]/80">
+          <div className="mb-2 font-mono text-xs text-danger">{error}</div>
+          <details className="text-xs text-text-tertiary">
+            <summary className="cursor-pointer">Show code</summary>
+            <pre className="mt-1 whitespace-pre-wrap font-mono text-xs leading-relaxed text-text-secondary">
               <code>{code}</code>
             </pre>
           </details>
@@ -246,7 +246,7 @@ export default function D3Block({ code, className }: D3BlockProps) {
             e.stopPropagation();
             setExpanded(true);
           }}
-          className="d3-chart bg-surface border border-border-subtle cursor-pointer overflow-hidden rounded-xl p-4 transition-all hover:shadow-md
+          className="d3-chart cursor-pointer overflow-hidden rounded-lg border border-border-soft bg-surface p-4 transition-shadow hover:shadow-md
             [&_svg]:mx-auto [&_svg]:block [&_svg]:max-w-full [&_svg]:h-auto"
           title="Click to expand visualization"
           dangerouslySetInnerHTML={{ __html: svg }}
@@ -288,7 +288,7 @@ export default function D3Block({ code, className }: D3BlockProps) {
             </button>
 
             <div
-              className="bg-[#FAF9F6] flex h-[90vh] w-[92vw] items-center justify-center overflow-hidden rounded-2xl p-8 shadow-2xl"
+              className="flex h-[90vh] w-[92vw] items-center justify-center overflow-hidden rounded-xl bg-page p-8 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div

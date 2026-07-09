@@ -23,23 +23,20 @@ export default function AnswerButton({
   disabled,
   onClick,
 }: AnswerButtonProps) {
-  let bgClass = 'bg-surface hover:bg-state-hover active:bg-state-active border-border-subtle shadow-sm';
-  let borderClass = 'border';
-  let textClass = 'text-text-primary';
+  let buttonClass =
+    'border-[0.5px] border-border-subtle bg-surface text-text-primary hover:bg-state-hover active:bg-state-active';
+  let chipClass = 'bg-state-pill text-text-secondary';
 
   if (isRevealed) {
     if (isCorrect) {
-      bgClass = 'bg-[#2F855A]/10';
-      borderClass = 'border-2 border-[#2F855A]';
-      textClass = 'text-[#2F855A] font-bold';
+      buttonClass = 'border border-emerald-600 bg-emerald-50 text-emerald-800 font-medium';
+      chipClass = 'bg-emerald-600 text-white';
     } else if (isChosen) {
-      bgClass = 'bg-danger/10';
-      borderClass = 'border-2 border-danger';
-      textClass = 'text-danger font-bold';
+      buttonClass = 'border border-rose-600 bg-rose-50 text-rose-800 font-medium';
+      chipClass = 'bg-rose-600 text-white';
     } else {
-      bgClass = 'bg-state-hover-soft';
-      borderClass = 'border border-border-soft';
-      textClass = 'text-text-primary/30';
+      buttonClass = 'border-[0.5px] border-border-soft bg-state-hover-soft text-text-primary/35';
+      chipClass = 'bg-state-pill text-text-tertiary/50';
     }
   }
 
@@ -48,21 +45,13 @@ export default function AnswerButton({
       id={`answer-btn-${index}`}
       onClick={onClick}
       disabled={disabled}
-      className={`w-full min-h-[56px] px-4 py-3 rounded-xl ${bgClass} ${borderClass} ${textClass}
-        text-left text-base font-medium transition-all duration-200
-        touch-action-manipulation
-        disabled:cursor-not-allowed
-        flex items-center gap-3 cursor-pointer`}
+      className={`flex min-h-[52px] w-full cursor-pointer items-center gap-3 rounded-lg px-4 py-3
+        text-left font-text text-base transition-colors duration-200
+        disabled:cursor-not-allowed ${buttonClass}`}
       style={{ touchAction: 'manipulation' }}
     >
       <span
-        className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-          isRevealed && isCorrect
-            ? 'bg-[#2F855A] text-white'
-            : isRevealed && isChosen
-            ? 'bg-danger text-white'
-            : 'bg-state-hover text-text-secondary/70 border border-border-soft'
-        }`}
+        className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-sm font-medium transition-colors ${chipClass}`}
       >
         {LABELS[index]}
       </span>

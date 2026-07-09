@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import MermaidBlock from './MermaidBlock';
 import D3Block from './D3Block';
 
@@ -43,16 +43,16 @@ function parseInline(text: string): React.ReactNode[] {
   return parts.map((part, index) => {
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={index} className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-xs text-accent">
+        <code key={index} className="rounded-sm bg-state-hover px-1 font-mono text-[0.92em] text-text-primary">
           {part.slice(1, -1)}
         </code>
       );
     }
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index} className="font-bold text-accent">{part.slice(2, -2)}</strong>;
+      return <strong key={index} className="font-semibold text-text-primary">{part.slice(2, -2)}</strong>;
     }
     if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={index} className="italic text-text-secondary">{part.slice(1, -1)}</em>;
+      return <em key={index} className="italic">{part.slice(1, -1)}</em>;
     }
     if (part.startsWith('[') && part.includes('](')) {
       const match = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
@@ -63,7 +63,7 @@ function parseInline(text: string): React.ReactNode[] {
             href={match[2]}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-accent underline hover:text-accent-strong transition-colors"
+            className="text-accent-strong underline decoration-accent/40 underline-offset-2 transition-colors hover:decoration-accent-strong"
           >
             {match[1]}
           </a>
@@ -72,7 +72,7 @@ function parseInline(text: string): React.ReactNode[] {
     }
     if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
       return (
-        <span key={index} className="font-mono text-sm text-accent bg-state-hover-soft border border-border-soft px-1 py-0.5 rounded">
+        <span key={index} className="rounded-sm bg-state-hover-soft px-1 font-mono text-[0.92em] text-text-secondary">
           {cleanMathText(part.slice(1, -1))}
         </span>
       );
@@ -156,6 +156,10 @@ function parseBlockSegments(blockText: string): BlockSegment[] {
   return segments;
 }
 
+function StreamCursor() {
+  return <span className="ml-0.5 inline-block h-4 w-2 animate-pulse rounded-xs bg-accent align-middle" />;
+}
+
 // Line-by-line block parser converting markdown and LaTeX structures into HTML components
 function renderBlock(blockText: string, key: number, showCursor: boolean): React.ReactNode {
   const segments = parseBlockSegments(blockText);
@@ -174,7 +178,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
         }
         if (seg.type === 'code') {
           return (
-            <pre key={idx} className="my-2 p-3 bg-state-hover-soft border border-border-soft rounded-xl overflow-x-auto font-mono text-xs text-text-secondary">
+            <pre key={idx} className="my-2 overflow-x-auto rounded-lg bg-state-hover-soft p-3 font-mono text-xs leading-relaxed text-text-secondary">
               <code>{seg.code}</code>
             </pre>
           );
@@ -194,10 +198,10 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
                 return (
                   <div
                     key={lIdx}
-                    className="my-3 py-3.5 px-4 bg-state-hover-soft border border-border-soft rounded-xl text-center font-mono text-sm md:text-base text-accent shadow-inner overflow-x-auto"
+                    className="my-3 overflow-x-auto rounded-lg bg-state-hover-soft px-4 py-3.5 text-center font-mono text-sm text-text-primary md:text-base"
                   >
                     {cleanMathText(formulaText)}
-                    {lineCursor && <span className="inline-block w-2.5 h-4 ml-1 bg-accent animate-pulse rounded-sm align-middle" />}
+                    {lineCursor && <StreamCursor />}
                   </div>
                 );
               }
@@ -207,7 +211,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
                 return (
                   <hr
                     key={lIdx}
-                    className="border-t border-border-soft my-4 w-full"
+                    className="my-4 w-full border-t border-border-soft"
                   />
                 );
               }
@@ -215,9 +219,9 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               // Header 3
               if (trimmed.startsWith('### ')) {
                 return (
-                  <h3 key={lIdx} className="text-base font-bold text-accent mt-3 mb-1 font-serif">
+                  <h3 key={lIdx} className="mt-3 text-base font-semibold text-text-primary">
                     {parseInline(trimmed.slice(4))}
-                    {lineCursor && <span className="inline-block w-2.5 h-4 ml-1 bg-accent animate-pulse rounded-sm" />}
+                    {lineCursor && <StreamCursor />}
                   </h3>
                 );
               }
@@ -225,9 +229,9 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               // Header 2
               if (trimmed.startsWith('## ')) {
                 return (
-                  <h2 key={lIdx} className="text-lg font-bold text-accent mt-4 mb-2 font-serif">
+                  <h2 key={lIdx} className="mt-4 text-lg font-semibold text-text-primary">
                     {parseInline(trimmed.slice(3))}
-                    {lineCursor && <span className="inline-block w-2.5 h-4 ml-1 bg-accent animate-pulse rounded-sm" />}
+                    {lineCursor && <StreamCursor />}
                   </h2>
                 );
               }
@@ -235,9 +239,9 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               // Header 1
               if (trimmed.startsWith('# ')) {
                 return (
-                  <h1 key={lIdx} className="text-xl font-bold text-accent mt-4 mb-2 font-serif">
+                  <h1 key={lIdx} className="mt-4 text-xl font-semibold text-text-primary">
                     {parseInline(trimmed.slice(2))}
-                    {lineCursor && <span className="inline-block w-2.5 h-4 ml-1 bg-accent animate-pulse rounded-sm" />}
+                    {lineCursor && <StreamCursor />}
                   </h1>
                 );
               }
@@ -245,11 +249,11 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               // Bulleted lists (- or *)
               if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
                 return (
-                  <div key={lIdx} className="flex items-start gap-2 pl-4 text-sm leading-relaxed">
-                    <span className="text-accent select-none mt-2 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-accent" />
-                    <span className="flex-1 text-text-primary">
+                  <div key={lIdx} className="flex items-start gap-2.5 pl-2 leading-relaxed">
+                    <span className="mt-[0.6em] h-1.5 w-1.5 flex-shrink-0 select-none rounded-full bg-text-tertiary/50" />
+                    <span className="flex-1">
                       {parseInline(trimmed.slice(2))}
-                      {lineCursor && <span className="inline-block w-2.5 h-4 ml-1 bg-accent animate-pulse rounded-sm align-middle" />}
+                      {lineCursor && <StreamCursor />}
                     </span>
                   </div>
                 );
@@ -259,11 +263,11 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               const numMatch = trimmed.match(/^(\d+)\.\s(.*)$/);
               if (numMatch) {
                 return (
-                  <div key={lIdx} className="flex items-start gap-2 pl-4 text-sm leading-relaxed">
-                    <span className="text-accent font-bold font-mono text-xs mt-0.5 select-none">{numMatch[1]}.</span>
-                    <span className="flex-1 text-text-primary">
+                  <div key={lIdx} className="flex items-start gap-2.5 pl-2 leading-relaxed">
+                    <span className="min-w-[1.1em] select-none text-right text-text-tertiary tabular-nums">{numMatch[1]}.</span>
+                    <span className="flex-1">
                       {parseInline(numMatch[2])}
-                      {lineCursor && <span className="inline-block w-2.5 h-4 ml-1 bg-accent animate-pulse rounded-sm align-middle" />}
+                      {lineCursor && <StreamCursor />}
                     </span>
                   </div>
                 );
@@ -272,9 +276,9 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               // Blockquotes
               if (trimmed.startsWith('> ')) {
                 return (
-                  <blockquote key={lIdx} className="pl-3 border-l-2 border-accent/40 italic text-text-secondary py-0.5 my-1">
+                  <blockquote key={lIdx} className="my-1 border-l-2 border-border-subtle py-0.5 pl-3 italic text-text-secondary">
                     {parseInline(trimmed.slice(2))}
-                    {lineCursor && <span className="inline-block w-2.5 h-4 ml-1 bg-accent animate-pulse rounded-sm" />}
+                    {lineCursor && <StreamCursor />}
                   </blockquote>
                 );
               }
@@ -286,9 +290,9 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
 
               // Normal text line
               return (
-                <p key={lIdx} className="text-sm md:text-base leading-relaxed text-text-primary">
+                <p key={lIdx} className="leading-relaxed">
                   {parseInline(line)}
-                  {lineCursor && <span className="inline-block w-2.5 h-4 ml-1 bg-accent animate-pulse rounded-sm align-middle" />}
+                  {lineCursor && <StreamCursor />}
                 </p>
               );
             })}
@@ -303,7 +307,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
 function splitIntoCards(content: string): string[] {
   const lines = content.split('\n');
   const cards: string[] = [];
-  
+
   let currentCardLines: string[] = [];
   let inCodeBlock = false;
   let currentLength = 0;
@@ -339,6 +343,22 @@ function splitIntoCards(content: string): string[] {
   return cards;
 }
 
+function ChevronLeftIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
 export default function Message({
   role,
   content,
@@ -356,84 +376,110 @@ export default function Message({
     return splitIntoCards(content);
   }, [content, isUser]);
 
+  // While streaming, follow the newest card so incoming text stays visible.
+  // Adjusts state during render (guarded by a comparison) per React's
+  // "adjusting state when props change" pattern.
+  const blockCount = blocks.length;
+  const [prevBlockCount, setPrevBlockCount] = useState(blockCount);
+  if (blockCount !== prevBlockCount) {
+    setPrevBlockCount(blockCount);
+    if (isStreaming && isLastMessage && blockCount > 0) {
+      setCurrentIndex(blockCount - 1);
+    }
+  }
+
   if (!isUser) {
     if (blocks.length === 0) return null;
 
-    const currentBlock = blocks[currentIndex];
-    const isFirst = currentIndex === 0;
-    const isLast = currentIndex === blocks.length - 1;
+    const safeIndex = Math.min(currentIndex, blocks.length - 1);
+    const currentBlock = blocks[safeIndex];
+    const isFirst = safeIndex === 0;
+    const isLast = safeIndex === blocks.length - 1;
     const showCursor = !!isStreaming && isLast;
 
     return (
-      <div className="flex flex-col w-full mb-6 max-w-[95%] mx-auto animate-fade-in">
-        {/* Card Stack Container (Premium Light Academy styled) */}
-        <div className="relative min-h-[220px] bg-surface border border-border-subtle rounded-2xl p-5 shadow-md flex flex-col justify-between hover:border-accent/30 transition-all duration-300">
-          
+      <div className="mt-6 w-full animate-fade-in">
+        <div className="flex flex-col rounded-lg bg-surface shadow-input">
           {/* Card header / progress indicator */}
-          <div className="flex justify-between items-center mb-4">
-            <span className="text-[10px] tracking-wider text-accent font-bold uppercase font-mono">
-              📖 LECTURE NOTES
+          <div className="flex items-center justify-between px-5 pt-4">
+            <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
+              Lecture notes
             </span>
-            <span className="text-xs text-text-tertiary font-mono">
-              Card {currentIndex + 1} of {blocks.length}
-            </span>
-          </div>
-
-          {/* Card Content with dynamic markdown rendering */}
-          <div
-            key={currentIndex}
-            className="flex-1 text-text-primary text-sm md:text-base leading-relaxed min-h-[100px] animate-fade-in"
-          >
-            {renderBlock(currentBlock, currentIndex, showCursor)}
-          </div>
-
-          {/* Navigation Controls / Quiz Trigger */}
-          <div className="mt-5 pt-3 border-t border-border-soft flex items-center justify-between gap-4">
-            <button
-              type="button"
-              onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-              disabled={isFirst}
-              className="px-3.5 py-2 rounded-xl bg-surface border border-border-subtle text-xs font-semibold text-text-primary
-                hover:bg-state-hover active:scale-95 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer shadow-sm"
-            >
-              ◀ BACK
-            </button>
-            
-            {/* Slide Dot Indicators */}
-            <div className="flex gap-1.5 overflow-x-auto py-1 max-w-[40%] scrollbar-none">
-              {blocks.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`w-2 h-2 rounded-full flex-shrink-0 transition-all duration-300 ${
-                    idx === currentIndex ? 'bg-accent w-4' : 'bg-state-hover'
-                  }`}
-                  aria-label={`Go to slide ${idx + 1}`}
-                />
-              ))}
-            </div>
-
-            {isLast && isLastMessage && showQuizButton && onQuizMe ? (
-              <button
-                type="button"
-                onClick={onQuizMe}
-                className="px-4 py-2 bg-gradient-to-r from-accent-strong to-accent text-surface text-xs font-black rounded-xl
-                  shadow-md shadow-accent/15 hover:shadow-lg active:scale-95 transition-all animate-pulse-subtle cursor-pointer"
-              >
-                📝 POP QUIZ
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setCurrentIndex((prev) => Math.min(blocks.length - 1, prev + 1))}
-                disabled={isLast}
-                className="px-3.5 py-2 rounded-xl bg-accent text-surface text-xs font-bold
-                  hover:bg-accent-strong active:scale-95 disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer shadow-md shadow-accent/15"
-              >
-                NEXT ▶
-              </button>
+            {blocks.length > 1 && (
+              <span className="text-xs tabular-nums text-text-tertiary">
+                {safeIndex + 1} of {blocks.length}
+              </span>
             )}
           </div>
+
+          {/* Card content */}
+          <div
+            key={safeIndex}
+            className="min-h-[100px] flex-1 animate-fade-in px-5 py-4 font-text text-base text-text-primary"
+          >
+            {renderBlock(currentBlock, safeIndex, showCursor)}
+          </div>
+
+          {/* Navigation / quiz trigger */}
+          {(blocks.length > 1 || (isLast && isLastMessage && showQuizButton && onQuizMe)) && (
+            <div className="flex items-center justify-between gap-3 border-t border-border-soft px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setCurrentIndex(Math.max(0, safeIndex - 1))}
+                disabled={isFirst}
+                className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border-[0.5px]
+                  border-border-subtle bg-transparent px-3 text-sm text-text-secondary
+                  transition-colors hover:bg-state-hover
+                  disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronLeftIcon />
+                Back
+              </button>
+
+              {/* Slide dot indicators */}
+              {blocks.length > 1 && (
+                <div className="scrollbar-none flex max-w-[40%] gap-1.5 overflow-x-auto py-1">
+                  {blocks.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setCurrentIndex(idx)}
+                      className={`h-1.5 flex-shrink-0 cursor-pointer rounded-full transition-all duration-300 ${
+                        idx === safeIndex ? 'w-4 bg-accent' : 'w-1.5 bg-border-subtle hover:bg-text-tertiary/40'
+                      }`}
+                      aria-label={`Go to card ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {isLast && isLastMessage && showQuizButton && onQuizMe ? (
+                <button
+                  type="button"
+                  onClick={onQuizMe}
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md
+                    bg-accent-strong px-3.5 text-sm font-medium text-white
+                    transition-opacity hover:opacity-90"
+                >
+                  Quiz me
+                  <ChevronRightIcon />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCurrentIndex(Math.min(blocks.length - 1, safeIndex + 1))}
+                  disabled={isLast}
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border-[0.5px]
+                    border-border-subtle bg-transparent px-3 text-sm text-text-secondary
+                    transition-colors hover:bg-state-hover
+                    disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Next
+                  <ChevronRightIcon />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -441,9 +487,9 @@ export default function Message({
 
   // User bubble
   return (
-    <div className="flex w-full justify-end mb-4">
-      <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-user-bubble text-text-primary border border-border-soft rounded-br-md shadow-sm">
-        <div className="whitespace-pre-wrap break-words">{content}</div>
+    <div className="mb-2 mt-8 flex w-full justify-end">
+      <div className="max-w-[85%] break-words rounded-lg bg-user-bubble px-4 py-2.5 font-text text-base leading-snug text-text-primary">
+        <div className="whitespace-pre-wrap">{content}</div>
       </div>
     </div>
   );

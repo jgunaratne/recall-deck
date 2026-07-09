@@ -56,21 +56,16 @@ export default function FuseTimer({ durationMs, onExpire, isPaused }: FuseTimerP
     };
   }, [isPaused, durationMs, onExpire]);
 
-  // Reset when durationMs changes (new question)
-  useEffect(() => {
-    setProgress(1);
-    startTimeRef.current = null;
-    elapsedBeforePauseRef.current = 0;
-    hasExpiredRef.current = false;
-  }, [durationMs]);
+  // No reset-on-prop-change effect needed: QuizTakeover remounts the timer
+  // with a new `key` for every question, which resets all state.
 
   // Color: accent when > 30%, danger when ≤ 30%
   const barColor = progress > 0.3 ? 'var(--color-accent)' : 'var(--color-danger)';
 
   return (
-    <div className="w-full h-2 bg-border-soft rounded-full overflow-hidden" role="timer" aria-label="Time remaining">
+    <div className="h-1 w-full overflow-hidden rounded-full bg-border-soft" role="timer" aria-label="Time remaining">
       <div
-        className="h-full rounded-full transition-colors duration-300"
+        className="h-full rounded-full"
         style={{
           width: `${progress * 100}%`,
           backgroundColor: barColor,

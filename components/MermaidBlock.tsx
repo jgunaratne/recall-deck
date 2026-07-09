@@ -90,17 +90,17 @@ export default function MermaidBlock({ code, className }: MermaidBlockProps) {
             darkMode: false,
             background: 'transparent',
             primaryColor: '#ffffff',
-            primaryTextColor: '#20252D',
-            primaryBorderColor: 'rgba(32, 37, 45, 0.2)',
-            lineColor: 'rgba(26, 54, 93, 0.6)', // Oxford blue edges
-            secondaryColor: '#FAF9F6',
-            tertiaryColor: '#f1f5f9',
-            noteBkgColor: '#f1f5f9',
-            noteTextColor: '#20252D',
-            noteBorderColor: 'rgba(32, 37, 45, 0.2)',
-            edgeLabelBackground: '#FAF9F6',
-            clusterBkg: 'rgba(32, 37, 45, 0.04)',
-            clusterBorder: 'rgba(32, 37, 45, 0.15)',
+            primaryTextColor: '#141413',
+            primaryBorderColor: 'rgba(31, 30, 29, 0.2)',
+            lineColor: 'rgba(115, 114, 108, 0.6)',
+            secondaryColor: '#faf9f5',
+            tertiaryColor: '#f0eee6',
+            noteBkgColor: '#f0eee6',
+            noteTextColor: '#141413',
+            noteBorderColor: 'rgba(31, 30, 29, 0.2)',
+            edgeLabelBackground: '#faf9f5',
+            clusterBkg: 'rgba(31, 30, 29, 0.04)',
+            clusterBorder: 'rgba(31, 30, 29, 0.15)',
           },
         });
 
@@ -149,8 +149,8 @@ export default function MermaidBlock({ code, className }: MermaidBlockProps) {
   if (error && !svg) {
     return (
       <div className={`my-2 ${className || ''}`}>
-        <div className="bg-slate-50 border border-slate-200 overflow-x-auto rounded-xl p-4">
-          <div className="text-[#20252D]/60 mb-2 flex items-center gap-2 text-xs font-medium font-mono">
+        <div className="overflow-x-auto rounded-lg border border-border-soft bg-state-hover-soft p-4">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-text-tertiary">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <line x1="12" y1="8" x2="12" y2="12" />
@@ -160,7 +160,7 @@ export default function MermaidBlock({ code, className }: MermaidBlockProps) {
             <button
               type="button"
               onClick={handleRefresh}
-              className="text-[#20252D]/60 hover:text-[#20252D] ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors hover:bg-black/5 cursor-pointer font-mono font-bold"
+              className="ml-auto flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium text-text-tertiary transition-colors hover:bg-state-hover hover:text-text-primary"
               title="Retry rendering"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -169,7 +169,7 @@ export default function MermaidBlock({ code, className }: MermaidBlockProps) {
               Retry
             </button>
           </div>
-          <pre className="font-mono text-xs leading-relaxed whitespace-pre-wrap text-[#C53030]">
+          <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-danger">
             <code>{code}</code>
           </pre>
         </div>
@@ -194,7 +194,7 @@ export default function MermaidBlock({ code, className }: MermaidBlockProps) {
             e.stopPropagation();
             setExpanded(true);
           }}
-          className="bg-surface border border-border-subtle cursor-pointer overflow-x-auto rounded-xl p-4 transition-all hover:shadow-md
+          className="cursor-pointer overflow-x-auto rounded-lg border border-border-soft bg-surface p-4 transition-shadow hover:shadow-md
             [&_svg]:mx-auto [&_svg]:block [&_svg]:max-w-full [&_svg]:h-auto"
           title="Click to expand diagram"
           dangerouslySetInnerHTML={{ __html: svg }}
@@ -236,7 +236,7 @@ export default function MermaidBlock({ code, className }: MermaidBlockProps) {
             </button>
 
             <div
-              className="bg-[#FAF9F6] flex h-[90vh] w-[92vw] items-center justify-center overflow-hidden rounded-2xl p-8 shadow-2xl"
+              className="flex h-[90vh] w-[92vw] items-center justify-center overflow-hidden rounded-xl bg-page p-8 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div

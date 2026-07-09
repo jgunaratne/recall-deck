@@ -1,11 +1,27 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import type { QuizQuestion, Answer } from '@/lib/schema';
+import type { QuizQuestion } from '@/lib/schema';
 import AnswerButton from './AnswerButton';
 import FuseTimer from './FuseTimer';
 import Scorecard from './Scorecard';
 import { PROFESSOR_INTRO_LINES } from '@/lib/prompts';
+
+function Spinner() {
+  // Sync to global clock so the animation continues smoothly across remounts.
+  const [delay] = useState(() => -(Date.now() % 1000));
+  return (
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      style={{ animation: 'spin 1s linear infinite', animationDelay: `${delay}ms` }}
+    >
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.2" />
+      <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 type QuizPhase = 'intro' | 'question' | 'reveal' | 'scorecard';
 
@@ -35,11 +51,6 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
 
   const questionStartTimeRef = useRef<number>(0);
   const prefetchedQuestionRef = useRef<QuizQuestion | null>(null);
-  const reducedMotion = useRef(false);
-
-  useEffect(() => {
-    reducedMotion.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  }, []);
 
   // Fetch a quiz question from the API
   const fetchQuestion = useCallback(
@@ -248,7 +259,7 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [phase, chosenIndex, handleAnswer, handleNext]);
 
-  const animationClass = reducedMotion.current ? 'animate-fade-in' : 'animate-slide-up';
+  const spinner = <Spinner />;
 
   return (
     <div
@@ -261,61 +272,58 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-2 relative z-10 border-b border-border-soft">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">🎓</span>
-          <span
-            className="text-accent font-bold text-lg tracking-wider"
-            style={{ fontFamily: "var(--font-fraunces), Georgia, serif" }}
-          >
-            POP QUIZ
-          </span>
-        </div>
+      <div className="relative z-10 flex h-[var(--header-height)] shrink-0 items-center justify-between px-4">
+        <span className="px-2 font-serif text-lg text-text-primary">Pop Quiz</span>
         <div className="flex items-center gap-3">
           {phase !== 'scorecard' && (
-            <span className="text-text-tertiary text-sm font-mono">
+            <span className="text-sm tabular-nums text-text-tertiary">
               Question {questionIndex + 1} of {QUESTIONS_PER_ROUND}
             </span>
           )}
           <button
             id="quiz-close-btn"
             onClick={onClose}
-            className="text-text-tertiary hover:text-text-primary text-xl transition-colors cursor-pointer"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-tertiary
+              transition-colors hover:bg-state-hover hover:text-text-primary"
             aria-label="Close quiz"
           >
-            ✕
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col px-4 pb-4 relative z-10 overflow-y-auto mt-4">
+      <div className="scroll-area relative z-10 mx-auto mt-4 flex w-full max-w-[var(--input-max-width)] flex-1 flex-col overflow-y-auto px-4 pb-6">
         {/* INTRO PHASE */}
         {phase === 'intro' && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center animate-fade-in">
+          <div className="flex flex-1 animate-fade-in flex-col items-center justify-center gap-6 text-center">
             <div
-              className="text-4xl font-bold text-accent tracking-wide"
-              style={{ fontFamily: "var(--font-fraunces), Georgia, serif" }}
+              className="font-serif text-[40px] font-light leading-[52px] text-text-secondary"
+              style={{ fontVariationSettings: '"opsz" 48' }}
             >
               Pop Quiz
             </div>
-            <p className="text-text-primary/80 text-base max-w-[320px] leading-relaxed italic">
+            <p className="max-w-[360px] text-base italic leading-relaxed text-text-secondary">
               &ldquo;{introLine}&rdquo;
             </p>
             {isLoading && (
-              <div className="flex items-center gap-2 text-accent/75 text-sm font-mono">
-                <span className="animate-spin">⏳</span>
-                <span>The Professor is writing your quiz...</span>
+              <div className="flex items-center gap-2.5 text-sm text-text-tertiary">
+                {spinner}
+                <span>The Professor is writing your quiz…</span>
               </div>
             )}
             {error && (
-              <div className="text-danger text-sm font-mono">
+              <div className="text-sm text-danger">
                 {error}
                 <button
                   onClick={startQuiz}
-                  className="block mx-auto mt-2 px-4 py-2 bg-accent text-surface rounded-lg font-bold text-xs"
+                  className="mx-auto mt-3 block h-8 cursor-pointer rounded-md bg-accent-strong px-3.5
+                    text-sm font-medium text-white transition-opacity hover:opacity-90"
                 >
-                  Try Again
+                  Try again
                 </button>
               </div>
             )}
@@ -324,7 +332,7 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
 
         {/* QUESTION PHASE */}
         {phase === 'question' && currentQuestion && (
-          <div className="flex-1 flex flex-col gap-4 animate-fade-in">
+          <div className="flex flex-1 animate-fade-in flex-col gap-4">
             {/* Timer */}
             <FuseTimer
               key={questionIndex}
@@ -334,40 +342,39 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
             />
 
             {/* Host intro */}
-            <p
-              className="text-text-tertiary text-xs italic text-center opacity-85 font-mono"
-            >
+            <p className="text-center text-sm italic text-text-tertiary">
               &ldquo;{currentQuestion.host_intro}&rdquo;
             </p>
 
             {/* Question */}
-            <h2
-              className="text-lg md:text-xl font-medium text-text-primary text-center leading-relaxed mt-1"
-              style={{ fontFamily: "var(--font-fraunces), Georgia, serif" }}
-            >
+            <h2 className="mt-1 text-center font-serif text-xl leading-relaxed text-text-primary md:text-2xl">
               {currentQuestion.question}
             </h2>
 
             {/* Difficulty badge */}
             <div className="flex justify-center">
               <span
-                className={`text-[10px] tracking-wider px-3 py-1 rounded-full font-bold font-mono ${
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                   currentQuestion.difficulty === 'warmup'
-                    ? 'bg-[#2F855A]/10 text-[#2F855A]'
+                    ? 'bg-emerald-100 text-emerald-800'
                     : currentQuestion.difficulty === 'solid'
-                    ? 'bg-accent/10 text-accent'
-                    : 'bg-danger/10 text-danger'
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-rose-100 text-rose-800'
                 }`}
               >
-                {currentQuestion.difficulty.toUpperCase()}
+                {currentQuestion.difficulty === 'warmup'
+                  ? 'Warm-up'
+                  : currentQuestion.difficulty === 'solid'
+                  ? 'Solid'
+                  : 'Spicy'}
               </span>
             </div>
 
             {/* Spacer */}
-            <div className="flex-1 min-h-4" />
+            <div className="min-h-4 flex-1" />
 
             {/* Answers */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               {currentQuestion.answers.map((answer, idx) => (
                 <AnswerButton
                   key={idx}
@@ -386,7 +393,7 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
 
         {/* REVEAL PHASE */}
         {phase === 'reveal' && currentQuestion && (
-          <div className="flex-1 flex flex-col gap-4 animate-fade-in">
+          <div className="flex flex-1 animate-fade-in flex-col gap-4">
             {/* Frozen timer */}
             <FuseTimer
               key={`reveal-${questionIndex}`}
@@ -396,15 +403,12 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
             />
 
             {/* Question (dimmed) */}
-            <h2
-              className="text-base text-text-primary/55 text-center leading-relaxed"
-              style={{ fontFamily: "var(--font-fraunces), Georgia, serif" }}
-            >
+            <h2 className="text-center font-serif text-base leading-relaxed text-text-primary/55">
               {currentQuestion.question}
             </h2>
 
             {/* Answers with reveal */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               {currentQuestion.answers.map((answer, idx) => (
                 <AnswerButton
                   key={idx}
@@ -419,34 +423,34 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
               ))}
             </div>
 
-            {/* Banter Card */}
-            <div className="mt-2 p-4 bg-surface border border-border-subtle shadow-sm rounded-xl">
-              <div className="flex items-start gap-3">
-                <span className="text-lg flex-shrink-0">💬</span>
-                <p className="text-text-primary text-sm leading-relaxed italic">
-                  {montyBanter || (
-                    <span className="inline-block w-2 h-4 bg-accent animate-pulse rounded-sm align-middle" />
-                  )}
-                </p>
+            {/* Banter card */}
+            <div className="mt-2 rounded-lg bg-surface p-4 shadow-input">
+              <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-tertiary">
+                The Professor
               </div>
+              <p className="text-sm italic leading-relaxed text-text-secondary">
+                {montyBanter || (
+                  <span className="inline-block h-4 w-2 animate-pulse rounded-xs bg-accent align-middle" />
+                )}
+              </p>
             </div>
 
             {/* Next button */}
-            <div className="flex-1 min-h-2" />
+            <div className="min-h-2 flex-1" />
             <button
               id="next-question-btn"
               onClick={handleNext}
-              className="w-full py-3 bg-accent text-surface rounded-xl font-bold text-sm
-                hover:bg-accent-strong active:scale-95 transition-all duration-200 cursor-pointer shadow-md shadow-accent/15"
+              className="h-10 w-full cursor-pointer rounded-lg bg-accent-strong text-sm font-medium text-white
+                transition-opacity hover:opacity-90"
             >
-              {questionIndex < QUESTIONS_PER_ROUND - 1 ? 'NEXT QUESTION' : 'SEE RESULTS'}
+              {questionIndex < QUESTIONS_PER_ROUND - 1 ? 'Next question' : 'See results'}
             </button>
           </div>
         )}
 
         {/* SCORECARD PHASE */}
         {phase === 'scorecard' && (
-          <div className="flex-1 flex flex-col items-center justify-center animate-fade-in">
+          <div className="flex flex-1 animate-fade-in flex-col items-center justify-center">
             <Scorecard
               score={score}
               total={QUESTIONS_PER_ROUND}
@@ -458,10 +462,10 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
 
         {/* Loading overlay */}
         {isLoading && phase !== 'intro' && (
-          <div className="absolute inset-0 bg-page/85 flex items-center justify-center z-20">
-            <div className="text-accent text-sm flex items-center gap-2 font-mono">
-              <span className="animate-spin">⏳</span>
-              <span>Loading...</span>
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-page/85">
+            <div className="flex items-center gap-2.5 text-sm text-text-tertiary">
+              {spinner}
+              <span>Loading…</span>
             </div>
           </div>
         )}

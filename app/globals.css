@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 /* ============================================================
-   Design tokens — mapped to Tailwind v4 @theme from edu-cld
+   Design tokens — mapped to Tailwind v4 @theme
    ============================================================ */
 @theme {
-  /* Fonts — Plus Jakarta Sans for UI, Fraunces for Serifs */
-  --font-sans: var(--font-sans), system-ui, -apple-system, sans-serif;
-  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
-  --font-mono: ui-monospace, Menlo, monospace;
+  /* Fonts — Geist from next/font, Fraunces for serif moments */
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
 
   /* Colors */
   --color-page: #faf9f5;
@@ -29,78 +29,38 @@
   --color-state-hover-soft: rgb(115 114 108 / 0.06);
   --color-state-active: rgb(115 114 108 / 0.12);
   --color-state-pill: rgb(115 114 108 / 0.1);
+
+  /* Font weights */
+  --font-weight-light: 330;
+  --font-weight-normal: 400;
+  --font-weight-text: 430;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+
+  /* Shadows */
+  --shadow-input: rgba(0, 0, 0, 0.035) 0px 4px 20px 0px, rgba(31, 30, 29, 0.15) 0px 0px 0px 0.5px;
+  --shadow-popover: rgba(0, 0, 0, 0.08) 0px 8px 24px, rgba(31, 30, 29, 0.15) 0px 0px 0px 0.5px;
 }
 
-/* Custom animations */
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+/* ============================================================
+   Layout constants (non-Tailwind custom properties)
+   ============================================================ */
+:root {
+  --header-height: 56px;
+  --content-max-width: 768px;
+  --input-max-width: 672px;
 }
 
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes pulse-subtle {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(217, 119, 87, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(217, 119, 87, 0);
-  }
-}
-
-/* Tailwind utility classes */
-@utility animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-@utility animate-slide-up {
-  animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@utility animate-pulse-subtle {
-  animation: pulse-subtle 2s ease-in-out infinite;
-}
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .animate-slide-up {
-    animation: fade-in 0.2s ease-out;
-  }
-
-  .animate-pulse-subtle {
-    animation: none;
-  }
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-state-hover);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-state-active);
-}
-
-/* Safe area insets for mobile */
+/* ============================================================
+   Base styles
+   ============================================================ */
 html {
   background-color: var(--color-page);
   height: 100%;
@@ -116,16 +76,34 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+textarea {
+  caret-color: var(--color-text-primary);
+}
+
 /* Touch optimization */
-button, a {
+button,
+a {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* D3 chart styling */
+/* Custom scrollbar for scroll areas */
+.scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-area::-webkit-scrollbar-thumb {
+  background: rgb(115 114 108 / 0.2);
+  border-radius: 4px;
+}
+.scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* D3 chart — professional editorial styling */
 .d3-chart text {
-  fill: var(--color-text-secondary);
+  fill: #3d3d3a;
   font-family: var(--font-sans);
+  font-size: 11px;
 }
 .d3-chart .domain {
   stroke: transparent;
@@ -134,5 +112,46 @@ button, a {
   stroke: #edece7;
 }
 .d3-chart .tick text {
-  fill: var(--color-text-tertiary);
+  fill: #8a8983;
+  font-size: 11px;
+}
+
+/* ============================================================
+   Animations
+   ============================================================ */
+
+/* Spinner keyframe (used with inline animationDelay for global-clock sync) */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@utility animate-slide-up {
+  animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up {
+    animation: fade-in 0.2s ease-out;
+  }
 }

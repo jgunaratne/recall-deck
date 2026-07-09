@@ -1,15 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
+import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const fraunces = Fraunces({
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  variable: "--font-fraunces",
-  display: "swap",
 });
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-sans",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
   display: "swap",
 });
@@ -24,7 +28,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#FAF9F6",
+  themeColor: "#faf9f5",
 };
 
 export default function RootLayout({
@@ -35,12 +39,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${plusJakartaSans.variable} h-full`}
+      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full`}
     >
-      <body
-        className="min-h-dvh flex flex-col bg-[#FAF9F6] text-[#20252D] antialiased"
-        style={{ fontFamily: "var(--font-sans), system-ui, sans-serif" }}
-      >
+      <body className="flex min-h-dvh flex-col font-sans antialiased">
         {children}
       </body>
     </html>

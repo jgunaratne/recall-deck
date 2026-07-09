@@ -18,24 +18,26 @@ export default function Scorecard({ score, total, streak, onBackToChat }: Scorec
   let subline = '';
 
   if (isPerfect) {
-    headline = 'EXCELLENT RESULT';
+    headline = 'Excellent result';
     subline = 'The Professor is... quietly impressed.';
   } else if (isZero) {
-    headline = 'CONCEPTUAL GAPS';
+    headline = 'Conceptual gaps';
     subline = 'The Professor recommends a trip back to the library.';
   } else if (score >= 2) {
-    headline = 'SOLID PERFORMANCE';
+    headline = 'Solid performance';
     subline = 'You got most of them. Ready for more advanced questions next time?';
   } else {
-    headline = 'DEVELOPING UNDERSTANDING';
+    headline = 'Developing understanding';
     subline = 'A good start, but there are a few core traps to watch out for.';
   }
 
+  const ringColor = isPerfect ? '#059669' : isZero ? 'var(--color-danger)' : 'var(--color-accent)';
+
   return (
-    <div className="flex flex-col items-center justify-center gap-6 p-8 text-center bg-surface border border-border-subtle rounded-2xl shadow-md max-w-sm mx-auto">
+    <div className="mx-auto flex w-full max-w-sm flex-col items-center justify-center gap-6 rounded-lg bg-surface p-8 text-center shadow-input">
       {/* Score circle */}
-      <div className="relative w-32 h-32">
-        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+      <div className="relative h-32 w-32">
+        <svg className="h-full w-full -rotate-90 transform" viewBox="0 0 120 120">
           <circle
             cx="60"
             cy="60"
@@ -49,7 +51,7 @@ export default function Scorecard({ score, total, streak, onBackToChat }: Scorec
             cy="60"
             r="50"
             fill="none"
-            stroke={isPerfect ? '#2F855A' : isZero ? 'var(--color-danger)' : 'var(--color-accent)'}
+            stroke={ringColor}
             strokeWidth="8"
             strokeLinecap="round"
             strokeDasharray={`${(score / total) * 314} 314`}
@@ -57,48 +59,39 @@ export default function Scorecard({ score, total, streak, onBackToChat }: Scorec
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold text-text-primary">
+          <span className="text-3xl font-semibold tabular-nums text-text-primary">
             {score}/{total}
           </span>
-          <span className="text-xs text-text-tertiary">{percentage}%</span>
+          <span className="text-xs tabular-nums text-text-tertiary">{percentage}%</span>
         </div>
       </div>
 
       {/* Headline */}
       <div>
-        <h2
-          className="text-xl font-bold tracking-wider"
-          style={{
-            color: isPerfect ? '#2F855A' : isZero ? 'var(--color-danger)' : 'var(--color-accent)',
-            fontFamily: "var(--font-fraunces), Georgia, serif",
-          }}
-        >
-          {headline}
-        </h2>
-        <p className="mt-2 text-sm text-text-secondary leading-relaxed">{subline}</p>
+        <h2 className="font-serif text-2xl text-text-primary">{headline}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-text-secondary">{subline}</p>
       </div>
 
       {/* Streak info */}
       {streak > 0 && (
-        <div className="flex items-center gap-2 text-accent">
-          <span className="text-lg">🔥</span>
-          <span className="text-sm font-semibold font-mono">Streak: {streak}</span>
-        </div>
+        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+          Streak · {streak} in a row
+        </span>
       )}
 
       {/* Back to chat */}
       <button
         id="back-to-chat-btn"
         onClick={onBackToChat}
-        className="mt-4 px-8 py-3 bg-accent text-surface rounded-xl font-bold text-base
-          hover:bg-accent-strong active:scale-95 transition-all duration-200 cursor-pointer shadow-md shadow-accent/15"
+        className="mt-2 h-10 w-full cursor-pointer rounded-lg bg-accent-strong text-sm font-medium text-white
+          transition-opacity hover:opacity-90"
         style={{ touchAction: 'manipulation' }}
       >
-        RETURN TO CHAT
+        Return to chat
       </button>
 
       {/* Future teaser */}
-      <p className="text-xs text-text-tertiary/70 max-w-[240px] leading-relaxed">
+      <p className="max-w-[260px] text-xs leading-relaxed text-text-tertiary">
         The Professor remembers. Concepts you missed will resurface in later sessions.
       </p>
     </div>

@@ -35,16 +35,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-page p-6">
-      <div className="w-full max-w-sm bg-surface border border-border-subtle p-8 rounded-2xl shadow-md">
-        <div className="text-center mb-8">
+    <div className="flex min-h-dvh items-center justify-center bg-page p-6">
+      <div className="w-full max-w-sm rounded-lg bg-surface p-8 shadow-input">
+        <div className="mb-8 text-center">
           <h1
-            className="text-4xl font-bold text-accent tracking-wider"
-            style={{ fontFamily: "var(--font-fraunces), Georgia, serif" }}
+            className="font-serif text-3xl font-light text-text-primary"
+            style={{ fontVariationSettings: '"opsz" 48' }}
           >
             Recall Deck
           </h1>
-          <p className="mt-2 text-sm text-text-tertiary/80">
+          <p className="mt-2 text-sm text-text-tertiary">
             Enter the demo passcode to continue
           </p>
         </div>
@@ -56,27 +56,26 @@ export default function LoginPage() {
             value={passcode}
             onChange={(e) => setPasscode(e.target.value)}
             placeholder="Passcode"
-            className="w-full px-4 py-3 bg-surface border border-border-subtle rounded-xl
-              text-text-primary placeholder-text-tertiary/30 text-center text-lg
-              focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20
-              transition-all"
+            className="w-full rounded-lg border-[0.5px] border-border-subtle bg-surface px-4 py-3
+              text-center text-lg text-text-primary placeholder:text-text-tertiary/50
+              transition-colors focus:border-accent focus:outline-none"
             autoFocus
             autoComplete="off"
           />
 
           {error && (
-            <p className="text-danger text-sm text-center font-medium" role="alert">{error}</p>
+            <p className="text-center text-sm text-danger" role="alert">{error}</p>
           )}
 
           <button
             id="login-submit-btn"
             type="submit"
             disabled={loading || !passcode}
-            className="w-full py-3 bg-accent text-surface rounded-xl font-bold text-base
-              hover:bg-accent-strong active:scale-95 transition-all duration-200
-              disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-accent/10"
+            className="h-10 w-full cursor-pointer rounded-lg bg-accent-strong text-sm font-medium text-white
+              transition-opacity hover:opacity-90
+              disabled:pointer-events-none disabled:opacity-50"
           >
-            {loading ? 'Checking...' : 'ENTER'}
+            {loading ? 'Checking…' : 'Continue'}
           </button>
         </form>
       </div>
