@@ -32,6 +32,8 @@ interface QuizTakeoverProps {
   cards: string[];
   provider: string;
   readingLevel?: ReadingLevel;
+  onReturnToHome: () => void;
+  onGoDeeper: () => void;
   onClose: () => void;
   onComplete?: (score: number, total: number) => void;
   onOpenSidebar?: () => void;
@@ -41,7 +43,7 @@ const QUESTIONS_PER_ROUND = 5;
 const TIMER_DURATION_MS = 20000;
 const DIFFICULTIES: Array<'warmup' | 'solid' | 'spicy'> = ['warmup', 'warmup', 'solid', 'solid', 'spicy'];
 
-export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', onClose, onComplete, onOpenSidebar }: QuizTakeoverProps) {
+export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', onReturnToHome, onGoDeeper, onClose, onComplete, onOpenSidebar }: QuizTakeoverProps) {
   const [phase, setPhase] = useState<QuizPhase>('intro');
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -57,6 +59,7 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
 
   const questionStartTimeRef = useRef<number>(0);
   const prefetchedQuestionRef = useRef<QuizQuestion | null>(null);
+  const generatedQuestionsRef = useRef<QuizQuestion[]>([]);
 
   // Fetch a quiz question from the API. Each question is grounded in one
   // lecture card: question i uses card i (wrapping if there are fewer cards
@@ -73,17 +76,29 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
         card,
       ].join('\n');
 
+      const previousQuestions = generatedQuestionsRef.current
+        .filter((q): q is QuizQuestion => !!q)
+        .map((q) => q.question);
+
       const res = await fetch('/api/quiz/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, difficulty, provider, readingLevel }),
+        body: JSON.stringify({
+          transcript,
+          difficulty,
+          provider,
+          readingLevel,
+          previousQuestions,
+        }),
       });
 
       if (!res.ok) {
         throw new Error('Failed to generate question');
       }
 
-      return res.json();
+      const q = await res.json();
+      generatedQuestionsRef.current[index] = q;
+      return q;
     },
     [question, cards, provider, readingLevel]
   );
@@ -146,6 +161,7 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
     setIsLoading(true);
     setError(null);
     try {
+      generatedQuestionsRef.current = [];
       const firstQuestion = await fetchQuestion(0);
       setCurrentQuestion(firstQuestion);
       setPhase('question');
@@ -462,7 +478,7 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
             {/* Banter card */}
             <div className="mt-2 rounded-lg bg-surface p-4 shadow-input">
               <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-tertiary">
-                The Professor
+                Feedback
               </div>
               <p className="text-sm italic leading-relaxed text-text-secondary">
                 {montyBanter || (
@@ -491,7 +507,8 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
               score={score}
               total={QUESTIONS_PER_ROUND}
               streak={streak}
-              onBackToChat={onClose}
+              onReturnToHome={onReturnToHome}
+              onGoDeeper={onGoDeeper}
             />
           </div>
         )}

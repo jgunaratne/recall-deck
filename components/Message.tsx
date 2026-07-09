@@ -22,6 +22,7 @@ function cleanMathText(math: string): string {
     .replace(/\\sqrt\{([^}]+)\}/g, '√($1)')
     .replace(/\\bar\{([^}]+)\}/g, '$1̄') // combining macron: x̄
     .replace(/\\hat\{([^}]+)\}/g, '$1̂') // combining circumflex: x̂
+    .replace(/\^?\\circ/g, '°')          // Convert \circ or ^\circ to degree symbol
     .replace(/\\pm/g, '±')              // Convert standard symbols
     .replace(/\\times/g, '×')
     .replace(/\\div/g, '÷')
@@ -43,6 +44,15 @@ function cleanMathText(math: string): string {
     .replace(/\\infty/g, '∞')
     .replace(/\\/g, '')                  // Remove residual backslashes
     .replace(/[{}]/g, '');               // Remove residual braces
+}
+
+// Strip card prefix labels like "Card 1: " or "Card 2 - " from headers
+function stripCardLabel(text: string): string {
+  const cleaned = text.replace(/^Card\s+\d+\s*[:\-\u2013\u2014]?\s*/i, '');
+  if (cleaned.trim().length === 0) {
+    return text;
+  }
+  return cleaned;
 }
 
 // Inline Markdown Parser supporting bold, italic, inline code, links, and inline math $...$
@@ -235,7 +245,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               if (trimmed.startsWith('###### ')) {
                 return (
                   <h6 key={lIdx} className="mt-2 text-sm font-semibold text-text-primary">
-                    {parseInline(trimmed.slice(7))}
+                    {parseInline(stripCardLabel(trimmed.slice(7)))}
                     {lineCursor && <StreamCursor />}
                   </h6>
                 );
@@ -245,7 +255,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               if (trimmed.startsWith('##### ')) {
                 return (
                   <h5 key={lIdx} className="mt-2 text-sm font-semibold text-text-primary">
-                    {parseInline(trimmed.slice(6))}
+                    {parseInline(stripCardLabel(trimmed.slice(6)))}
                     {lineCursor && <StreamCursor />}
                   </h5>
                 );
@@ -255,7 +265,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               if (trimmed.startsWith('#### ')) {
                 return (
                   <h4 key={lIdx} className="mt-3 text-[15px] font-semibold text-text-primary">
-                    {parseInline(trimmed.slice(5))}
+                    {parseInline(stripCardLabel(trimmed.slice(5)))}
                     {lineCursor && <StreamCursor />}
                   </h4>
                 );
@@ -265,7 +275,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               if (trimmed.startsWith('### ')) {
                 return (
                   <h3 key={lIdx} className="mt-3 text-base font-semibold text-text-primary">
-                    {parseInline(trimmed.slice(4))}
+                    {parseInline(stripCardLabel(trimmed.slice(4)))}
                     {lineCursor && <StreamCursor />}
                   </h3>
                 );
@@ -275,7 +285,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               if (trimmed.startsWith('## ')) {
                 return (
                   <h2 key={lIdx} className="mt-4 text-lg font-semibold text-text-primary">
-                    {parseInline(trimmed.slice(3))}
+                    {parseInline(stripCardLabel(trimmed.slice(3)))}
                     {lineCursor && <StreamCursor />}
                   </h2>
                 );
@@ -285,7 +295,7 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
               if (trimmed.startsWith('# ')) {
                 return (
                   <h1 key={lIdx} className="mt-4 text-xl font-semibold text-text-primary">
-                    {parseInline(trimmed.slice(2))}
+                    {parseInline(stripCardLabel(trimmed.slice(2)))}
                     {lineCursor && <StreamCursor />}
                   </h1>
                 );

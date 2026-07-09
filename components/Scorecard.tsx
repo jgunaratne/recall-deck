@@ -6,10 +6,11 @@ interface ScorecardProps {
   score: number;
   total: number;
   streak: number;
-  onBackToChat: () => void;
+  onReturnToHome: () => void;
+  onGoDeeper: () => void;
 }
 
-export default function Scorecard({ score, total, streak, onBackToChat }: ScorecardProps) {
+export default function Scorecard({ score, total, streak, onReturnToHome, onGoDeeper }: ScorecardProps) {
   const percentage = Math.round((score / total) * 100);
   const isPerfect = score === total;
   const isZero = score === 0;
@@ -19,10 +20,10 @@ export default function Scorecard({ score, total, streak, onBackToChat }: Scorec
 
   if (isPerfect) {
     headline = 'Excellent result';
-    subline = 'The Professor is... quietly impressed.';
+    subline = 'Great job! You have fully mastered these concepts.';
   } else if (isZero) {
     headline = 'Conceptual gaps';
-    subline = 'The Professor recommends a trip back to the library.';
+    subline = 'Reviewing the material and trying again is recommended.';
   } else if (score >= 2) {
     headline = 'Solid performance';
     subline = 'You got most of them. Ready for more advanced questions next time?';
@@ -79,20 +80,31 @@ export default function Scorecard({ score, total, streak, onBackToChat }: Scorec
         </span>
       )}
 
-      {/* Back to chat */}
-      <button
-        id="back-to-chat-btn"
-        onClick={onBackToChat}
-        className="mt-2 h-10 w-full cursor-pointer rounded-lg bg-accent-strong text-sm font-medium text-white
-          transition-opacity hover:opacity-90"
-        style={{ touchAction: 'manipulation' }}
-      >
-        Return to chat
-      </button>
+      {/* Action buttons */}
+      <div className="flex w-full flex-col gap-2">
+        <button
+          id="go-deeper-btn"
+          onClick={onGoDeeper}
+          className="h-10 w-full cursor-pointer rounded-lg bg-accent-strong text-sm font-medium text-white
+            transition-opacity hover:opacity-90"
+          style={{ touchAction: 'manipulation' }}
+        >
+          Go deeper on this topic
+        </button>
+        <button
+          id="return-to-home-btn"
+          onClick={onReturnToHome}
+          className="h-10 w-full cursor-pointer rounded-lg border border-border-strong bg-surface text-sm font-medium text-text-primary
+            transition-colors hover:bg-state-hover"
+          style={{ touchAction: 'manipulation' }}
+        >
+          Return to home
+        </button>
+      </div>
 
       {/* Future teaser */}
       <p className="max-w-[260px] text-xs leading-relaxed text-text-tertiary">
-        The Professor remembers. Concepts you missed will resurface in later sessions.
+        Concepts you missed will resurface in later sessions.
       </p>
     </div>
   );

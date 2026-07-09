@@ -64,7 +64,7 @@ const GEMINI_QUIZ_QUESTION_SCHEMA = {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { transcript, difficulty = 'solid' } = body;
+    const { transcript, difficulty = 'solid', previousQuestions } = body;
     const provider = resolveProvider(body);
     const readingLevel: ReadingLevel = READING_LEVELS.includes(body.readingLevel)
       ? body.readingLevel
@@ -86,6 +86,10 @@ export async function POST(req: Request) {
       });
     }
 
+    const validatedPreviousQuestions = Array.isArray(previousQuestions)
+      ? previousQuestions.filter((q): q is string => typeof q === 'string')
+      : [];
+
     let parsed: unknown;
 
     if (provider === 'gemini') {
@@ -96,7 +100,7 @@ export async function POST(req: Request) {
         contents: [
           {
             role: 'user',
-            parts: [{ text: getQuizGenerationUserPrompt(transcript) }],
+            parts: [{ text: getQuizGenerationUserPrompt(transcript, validatedPreviousQuestions) }],
           },
         ],
         config: {
@@ -123,7 +127,7 @@ export async function POST(req: Request) {
         messages: [
           {
             role: 'user',
-            content: getQuizGenerationUserPrompt(transcript),
+            content: getQuizGenerationUserPrompt(transcript, validatedPreviousQuestions),
           },
         ],
         output_config: {

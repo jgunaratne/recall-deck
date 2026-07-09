@@ -285,17 +285,17 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* New chat */}
+        {/* New topic */}
         <div className="flex flex-col gap-px px-2 pt-2">
           <button
             type="button"
             onClick={onNewChat}
-            title="New chat"
+            title="New topic"
             className="flex h-8 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm text-text-secondary
               transition-colors hover:bg-state-hover"
           >
             <span className="text-text-primary"><PlusIcon /></span>
-            <span className="grow truncate text-left leading-5">New chat</span>
+            <span className="grow truncate text-left leading-5">New topic</span>
           </button>
         </div>
 
@@ -325,16 +325,16 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Settings: reading level + engine */}
+        {/* Settings: reading level + model */}
         <div className="flex flex-col gap-4 border-t-[0.5px] border-border-subtle p-3">
           <ReadingLevelSlider value={readingLevel} onChange={onReadingLevelChange} />
 
           {providers.length > 0 && (
             <div>
               <div className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
-                Engine
+                Model
               </div>
-            <div className="flex rounded-md bg-state-hover p-0.5" role="radiogroup" aria-label="Model engine">
+            <div className="flex rounded-md bg-state-hover p-0.5" role="radiogroup" aria-label="Model selection">
               {ALL_PROVIDERS.map((p) => {
                 const available = providers.includes(p);
                 const selected = provider === p;

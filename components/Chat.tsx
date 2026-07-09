@@ -116,6 +116,7 @@ export default function Chat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messageCountRef = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const autoStartQuizRef = useRef(false);
 
   useEffect(() => {
     fetch('/api/providers')
@@ -294,7 +295,13 @@ export default function Chat() {
       if (fullResponse.length > 100) {
         setShowQuizButton(true);
       }
+
+      if (autoStartQuizRef.current && fullResponse) {
+        autoStartQuizRef.current = false;
+        startQuizForMessage(userMessage.content, fullResponse);
+      }
     } catch (err) {
+      autoStartQuizRef.current = false;
       setError(err instanceof Error ? err.message : 'Failed to get response');
       setMessages(newMessages);
     } finally {
@@ -314,16 +321,20 @@ export default function Chat() {
     }
   };
 
+  const startQuizForMessage = (userQuestion: string, assistantContent: string) => {
+    setQuizSource({
+      question: userQuestion,
+      cards: splitIntoCards(assistantContent),
+    });
+    setShowQuizButton(false);
+  };
+
   // Launch a quiz grounded in the lecture cards of the latest answer.
   const handleQuizMe = () => {
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
     if (!lastAssistant) return;
-    setQuizSource({
-      question: lastUser?.content ?? '',
-      cards: splitIntoCards(lastAssistant.content),
-    });
-    setShowQuizButton(false);
+    startQuizForMessage(lastUser?.content ?? '', lastAssistant.content);
   };
 
   const handleQuizComplete = (score: number, total: number) => {
@@ -343,8 +354,24 @@ export default function Chat() {
     setError(null);
   };
 
+  const handleQuizDismiss = () => {
+    setQuizSource(null);
+    setError(null);
+  };
+
+  const handleQuizGoDeeper = () => {
+    const topic = quizSource?.question ?? 'the previous topic';
+    setQuizSource(null);
+    setError(null);
+    setActiveId(null);
+    setMessages([]);
+    autoStartQuizRef.current = true;
+    sendMessage(`Go deeper on the topic: "${topic}". Please explain the advanced concepts, subtleties, and edge cases in more detail.`);
+  };
+
   const handleNewChat = () => {
     if (isStreaming) return;
+    setQuizSource(null);
     setMessages([]);
     setActiveId(null);
     setShowQuizButton(false);
@@ -560,7 +587,9 @@ export default function Chat() {
           cards={quizSource.cards}
           provider={provider}
           readingLevel={readingLevel}
-          onClose={handleQuizClose}
+          onReturnToHome={handleQuizClose}
+          onGoDeeper={handleQuizGoDeeper}
+          onClose={handleQuizDismiss}
           onComplete={handleQuizComplete}
           onOpenSidebar={() => setSidebarOpen(true)}
         />
