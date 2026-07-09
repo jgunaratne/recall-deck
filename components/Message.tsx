@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import MermaidBlock from './MermaidBlock';
 import D3Block from './D3Block';
+import { splitIntoCards } from '@/lib/cards';
 
 interface MessageProps {
   role: 'user' | 'assistant';
@@ -17,6 +18,10 @@ interface MessageProps {
 function cleanMathText(math: string): string {
   return math
     .replace(/\\text\{([^}]+)\}/g, '$1') // Strip \text{...} wrappers
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2') // \frac{a}{b} -> a/b
+    .replace(/\\sqrt\{([^}]+)\}/g, '√($1)')
+    .replace(/\\bar\{([^}]+)\}/g, '$1̄') // combining macron: x̄
+    .replace(/\\hat\{([^}]+)\}/g, '$1̂') // combining circumflex: x̂
     .replace(/\\pm/g, '±')              // Convert standard symbols
     .replace(/\\times/g, '×')
     .replace(/\\div/g, '÷')
@@ -27,18 +32,26 @@ function cleanMathText(math: string): string {
     .replace(/\\alpha/g, 'α')
     .replace(/\\beta/g, 'β')
     .replace(/\\epsilon/g, 'ε')
+    .replace(/\\lambda/g, 'λ')
+    .replace(/\\theta/g, 'θ')
+    .replace(/\\pi/g, 'π')
+    .replace(/\\Delta/g, 'Δ')
+    .replace(/\\sum/g, 'Σ')
     .replace(/\\cdot/g, '·')
     .replace(/\\approx/g, '≈')
     .replace(/\\neq/g, '≠')
     .replace(/\\infty/g, '∞')
-    .replace(/\\/g, '');                 // Remove residual backslashes
+    .replace(/\\/g, '')                  // Remove residual backslashes
+    .replace(/[{}]/g, '');               // Remove residual braces
 }
 
 // Inline Markdown Parser supporting bold, italic, inline code, links, and inline math $...$
+// Matches inline code (`code`), bold (**bold**), italic (*italic*), links ([text](url)),
+// and inline math ($math$ — first/last chars non-space, so "$5 and" prose is left alone)
+const INLINE_TOKEN_REGEX = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|\$[^\s$](?:[^$\n]*[^\s$])?\$)/g;
+
 function parseInline(text: string): React.ReactNode[] {
-  // Matches inline code (`code`), bold (**bold**), italic (*italic*), links ([text](url)), and inline math ($math$)
-  const regex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|\$[^{$}]+\$)/g;
-  const parts = text.split(regex);
+  const parts = text.split(INLINE_TOKEN_REGEX);
 
   return parts.map((part, index) => {
     if (part.startsWith('`') && part.endsWith('`')) {
@@ -48,11 +61,13 @@ function parseInline(text: string): React.ReactNode[] {
         </code>
       );
     }
+    // Bold/italic content is parsed recursively so nested tokens like
+    // **Data Variability ($\sigma$):** render their inner math/code.
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index} className="font-semibold text-text-primary">{part.slice(2, -2)}</strong>;
+      return <strong key={index} className="font-semibold text-text-primary">{parseInline(part.slice(2, -2))}</strong>;
     }
     if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={index} className="italic">{part.slice(1, -1)}</em>;
+      return <em key={index} className="italic">{parseInline(part.slice(1, -1))}</em>;
     }
     if (part.startsWith('[') && part.includes('](')) {
       const match = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
@@ -303,46 +318,6 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
   );
 }
 
-// Custom card splitter that respects code blocks and targets ~1200 characters per card
-function splitIntoCards(content: string): string[] {
-  const lines = content.split('\n');
-  const cards: string[] = [];
-
-  let currentCardLines: string[] = [];
-  let inCodeBlock = false;
-  let currentLength = 0;
-
-  const flushCard = () => {
-    if (currentCardLines.length > 0) {
-      cards.push(currentCardLines.join('\n').trim());
-      currentCardLines = [];
-      currentLength = 0;
-    }
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith('```')) {
-      inCodeBlock = !inCodeBlock;
-    }
-
-    currentCardLines.push(line);
-    currentLength += line.length + 1;
-
-    // Split on empty lines outside of code blocks if we reached the target length
-    if (!inCodeBlock && trimmed.length === 0) {
-      if (currentLength > 1000) {
-        flushCard();
-      }
-    }
-  }
-
-  flushCard();
-  return cards;
-}
-
 function ChevronLeftIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -376,17 +351,9 @@ export default function Message({
     return splitIntoCards(content);
   }, [content, isUser]);
 
-  // While streaming, follow the newest card so incoming text stays visible.
-  // Adjusts state during render (guarded by a comparison) per React's
-  // "adjusting state when props change" pattern.
-  const blockCount = blocks.length;
-  const [prevBlockCount, setPrevBlockCount] = useState(blockCount);
-  if (blockCount !== prevBlockCount) {
-    setPrevBlockCount(blockCount);
-    if (isStreaming && isLastMessage && blockCount > 0) {
-      setCurrentIndex(blockCount - 1);
-    }
-  }
+  // While streaming, new cards accumulate off-screen: the user stays on the
+  // card they're reading and advances at their own pace (the counter and
+  // Next button reflect newly arrived cards).
 
   if (!isUser) {
     if (blocks.length === 0) return null;
@@ -405,11 +372,15 @@ export default function Message({
             <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
               Lecture notes
             </span>
-            {blocks.length > 1 && (
-              <span className="text-xs tabular-nums text-text-tertiary">
-                {safeIndex + 1} of {blocks.length}
-              </span>
-            )}
+            <span className="flex items-center gap-2.5 text-xs tabular-nums text-text-tertiary">
+              {isStreaming && isLastMessage && !isLast && (
+                <span className="flex items-center gap-1.5 text-accent">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                  Writing
+                </span>
+              )}
+              {blocks.length > 1 && `${safeIndex + 1} of ${blocks.length}`}
+            </span>
           </div>
 
           {/* Card content */}

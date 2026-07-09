@@ -26,16 +26,20 @@ function Spinner() {
 type QuizPhase = 'intro' | 'question' | 'reveal' | 'scorecard';
 
 interface QuizTakeoverProps {
-  transcript: string;
+  /** The student's question that produced the lecture. */
+  question: string;
+  /** Lecture card contents — each quiz question is grounded in one card. */
+  cards: string[];
   provider: string;
   onClose: () => void;
+  onComplete?: (score: number, total: number) => void;
 }
 
 const QUESTIONS_PER_ROUND = 3;
 const TIMER_DURATION_MS = 20000;
 const DIFFICULTIES: Array<'warmup' | 'solid' | 'spicy'> = ['warmup', 'solid', 'spicy'];
 
-export default function QuizTakeover({ transcript, provider, onClose }: QuizTakeoverProps) {
+export default function QuizTakeover({ question, cards, provider, onClose, onComplete }: QuizTakeoverProps) {
   const [phase, setPhase] = useState<QuizPhase>('intro');
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -52,9 +56,21 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
   const questionStartTimeRef = useRef<number>(0);
   const prefetchedQuestionRef = useRef<QuizQuestion | null>(null);
 
-  // Fetch a quiz question from the API
+  // Fetch a quiz question from the API. Each question is grounded in one
+  // lecture card: question i uses card i (wrapping if there are fewer cards
+  // than questions), so the quiz tests exactly what the cards taught.
   const fetchQuestion = useCallback(
-    async (difficulty: 'warmup' | 'solid' | 'spicy'): Promise<QuizQuestion> => {
+    async (index: number): Promise<QuizQuestion> => {
+      const difficulty = DIFFICULTIES[index];
+      const cardIndex = cards.length > 0 ? index % cards.length : 0;
+      const card = cards[cardIndex] ?? '';
+      const transcript = [
+        `Student asked: ${question}`,
+        '',
+        `Tutor's lecture notes (card ${cardIndex + 1} of ${cards.length}) — base the question ONLY on this content:`,
+        card,
+      ].join('\n');
+
       const res = await fetch('/api/quiz/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,7 +83,7 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
 
       return res.json();
     },
-    [transcript, provider]
+    [question, cards, provider]
   );
 
   // Stream Monty's reaction
@@ -128,8 +144,8 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
     setIsLoading(true);
     setError(null);
     try {
-      const question = await fetchQuestion(DIFFICULTIES[0]);
-      setCurrentQuestion(question);
+      const firstQuestion = await fetchQuestion(0);
+      setCurrentQuestion(firstQuestion);
       setPhase('question');
       questionStartTimeRef.current = performance.now();
     } catch {
@@ -174,7 +190,7 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
       // Pre-fetch next question concurrently while user reads feedback (if not last)
       const nextIndex = questionIndex + 1;
       if (nextIndex < QUESTIONS_PER_ROUND) {
-        fetchQuestion(DIFFICULTIES[nextIndex])
+        fetchQuestion(nextIndex)
           .then((q) => {
             prefetchedQuestionRef.current = q;
           })
@@ -204,6 +220,7 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
     const nextIndex = questionIndex + 1;
 
     if (nextIndex >= QUESTIONS_PER_ROUND) {
+      onComplete?.(score, QUESTIONS_PER_ROUND);
       setPhase('scorecard');
       return;
     }
@@ -221,7 +238,7 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
       setIsLoading(true);
       setError(null);
       try {
-        const q = await fetchQuestion(DIFFICULTIES[nextIndex]);
+        const q = await fetchQuestion(nextIndex);
         setCurrentQuestion(q);
         setPhase('question');
         questionStartTimeRef.current = performance.now();
@@ -231,7 +248,7 @@ export default function QuizTakeover({ transcript, provider, onClose }: QuizTake
         setIsLoading(false);
       }
     }
-  }, [questionIndex, fetchQuestion]);
+  }, [questionIndex, fetchQuestion, onComplete, score]);
 
   // Handle timer expiry (treat as incorrect)
   const handleTimerExpire = useCallback(() => {

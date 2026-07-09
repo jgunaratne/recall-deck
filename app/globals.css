@@ -53,6 +53,8 @@
    Layout constants (non-Tailwind custom properties)
    ============================================================ */
 :root {
+  --sidebar-width: 288px;
+  --sidebar-width-collapsed: 48px;
   --header-height: 56px;
   --content-max-width: 768px;
   --input-max-width: 672px;
