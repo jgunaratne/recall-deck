@@ -552,6 +552,8 @@ export default function Chat() {
                 <div className="mx-auto max-w-[var(--content-max-width)] px-4 pb-6 sm:px-6">
                   {messages.map((msg, idx) => {
                     const isLast = idx === messages.length - 1;
+                    // Derive topic from the first user message
+                    const firstUserMsg = messages.find((m) => m.role === 'user');
                     return (
                       <Message
                         key={`${activeId ?? 'draft'}-${idx}`}
@@ -561,6 +563,8 @@ export default function Chat() {
                         isLastMessage={isLast}
                         showQuizButton={showQuizButton}
                         onQuizMe={handleQuizMe}
+                        topic={firstUserMsg?.content}
+                        readingLevel={readingLevel}
                       />
                     );
                   })}

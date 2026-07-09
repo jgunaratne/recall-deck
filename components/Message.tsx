@@ -3,7 +3,9 @@
 import React, { useState } from 'react';
 import MermaidBlock from './MermaidBlock';
 import D3Block from './D3Block';
+import GeminiLiveOverlay from './GeminiLiveOverlay';
 import { splitIntoCards } from '@/lib/cards';
+import type { ReadingLevel } from '@/lib/prompts';
 
 interface MessageProps {
   role: 'user' | 'assistant';
@@ -12,6 +14,12 @@ interface MessageProps {
   isLastMessage?: boolean;
   showQuizButton?: boolean;
   onQuizMe?: () => void;
+  /** Topic the user asked about — used for Gemini Live context */
+  topic?: string;
+  /** Current reading level */
+  readingLevel?: ReadingLevel;
+  /** Quiz context to inject into Gemini Live */
+  quizContext?: string | null;
 }
 
 // Convert standard LaTeX equations/formulas into clean readable Unicode
@@ -381,6 +389,9 @@ export default function Message({
   isLastMessage,
   showQuizButton,
   onQuizMe,
+  topic,
+  readingLevel = 'high',
+  quizContext,
 }: MessageProps) {
   const isUser = role === 'user';
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -439,9 +450,21 @@ export default function Message({
         <div className="flex flex-col rounded-lg bg-surface shadow-input">
           {/* Card header / progress indicator */}
           <div className="flex items-center justify-between px-5 pt-4">
-            <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
-              Lecture notes
-            </span>
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
+                Lecture notes
+              </span>
+              {topic && (
+                <GeminiLiveOverlay
+                  topic={topic}
+                  readingLevel={readingLevel}
+                  isStreaming={!!isStreaming}
+                  currentCardContent={currentBlock}
+                  quizContext={quizContext ?? null}
+                  allCards={blocks}
+                />
+              )}
+            </div>
             <span className="flex items-center gap-2.5 text-xs tabular-nums text-text-tertiary">
               {isStreaming && isLastMessage && !isLast && (
                 <span className="flex items-center gap-1.5 text-accent">
