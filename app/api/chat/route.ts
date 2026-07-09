@@ -5,6 +5,42 @@ import { resolveProvider } from '@/lib/provider';
 
 export const runtime = 'nodejs';
 
+// Map provider SDK errors to a user-presentable message and HTTP status,
+// without leaking raw provider payloads to the client.
+function describeChatError(error: unknown): { status: number; message: string } {
+  const raw = error instanceof Error ? error.message : String(error);
+  let code = (error as { status?: number } | null)?.status;
+  if (typeof code !== 'number') {
+    // Gemini errors embed the upstream JSON body in the message.
+    const match = raw.match(/"code"\s*:\s*(\d{3})/);
+    if (match) code = parseInt(match[1], 10);
+  }
+
+  if (code === 503 || code === 529) {
+    return {
+      status: 503,
+      message:
+        'The AI model is experiencing high demand right now. This is usually temporary — try again in a moment.',
+    };
+  }
+  if (code === 429) {
+    return {
+      status: 429,
+      message: 'Rate limit reached. Wait a few seconds and try again.',
+    };
+  }
+  if (code === 401 || code === 403) {
+    return {
+      status: code,
+      message: 'The AI provider rejected the API key — check the server configuration.',
+    };
+  }
+  return {
+    status: 500,
+    message: 'Something went wrong while generating a response. Please try again.',
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -72,8 +108,8 @@ export async function POST(req: Request) {
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Stream error';
-            const data = JSON.stringify({ type: 'error', error: errorMessage });
+            console.error('Chat stream error:', error instanceof Error ? error.message : error);
+            const data = JSON.stringify({ type: 'error', error: describeChatError(error).message });
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             controller.close();
           }
@@ -105,8 +141,8 @@ export async function POST(req: Request) {
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
           } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Stream error';
-            const data = JSON.stringify({ type: 'error', error: errorMessage });
+            console.error('Chat stream error:', error instanceof Error ? error.message : error);
+            const data = JSON.stringify({ type: 'error', error: describeChatError(error).message });
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             controller.close();
           }
@@ -123,10 +159,10 @@ export async function POST(req: Request) {
       },
     });
   } catch (error) {
-    // Generic error - don't expose internals
     console.error('Chat API error:', error instanceof Error ? error.message : 'Unknown error');
-    return new Response(JSON.stringify({ error: 'Failed to process chat request' }), {
-      status: 500,
+    const { status, message } = describeChatError(error);
+    return new Response(JSON.stringify({ error: message }), {
+      status,
       headers: { 'Content-Type': 'application/json' },
     });
   }

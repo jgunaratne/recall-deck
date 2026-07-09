@@ -108,6 +108,11 @@ export default function Chat() {
   // Latest quiz question, streamed to the voice tutor's context window.
   const [quizContext, setQuizContext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Snapshot of the last failed exchange so the error banner can offer Retry.
+  const [retrySnapshot, setRetrySnapshot] = useState<{
+    messages: ChatMessage[];
+    convId: string;
+  } | null>(null);
   const [visibleTopics, setVisibleTopics] = useState<Topic[]>([]);
 
   // Conversation history (localStorage-backed external store)
@@ -196,47 +201,19 @@ export default function Chat() {
   };
 
   // Send message
-  const sendMessage = async (content: string) => {
-    if (!content.trim() || isStreaming) return;
-
-    const userMessage: ChatMessage = { role: 'user', content: content.trim() };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInput('');
+  // Stream one assistant reply for an already-recorded user turn. Kept
+  // separate from sendMessage so a failed exchange can be retried verbatim.
+  const runExchange = async (newMessages: ChatMessage[], convId: string) => {
     setIsStreaming(true);
     setShowQuizButton(false);
     setError(null);
-
-    // Create or update the conversation record for this turn.
-    let convId = activeId;
-    if (!convId) {
-      convId = newConversationId();
-      setActiveId(convId);
-      const now = Date.now();
-      upsertConversation({
-        id: convId,
-        title: conversationTitle(userMessage.content),
-        messages: newMessages,
-        quizzes: [],
-        createdAt: now,
-        updatedAt: now,
-      });
-    } else {
-      updateConversation(convId, (c) => ({
-        ...c,
-        messages: newMessages,
-        updatedAt: Date.now(),
-      }));
-    }
-
-    // Reset textarea height
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-    }
+    setRetrySnapshot(null);
 
     // Add empty assistant message for streaming
     const assistantMessage: ChatMessage = { role: 'assistant', content: '' };
     setMessages([...newMessages, assistantMessage]);
+
+    const userMessage = newMessages[newMessages.length - 1];
 
     try {
       const res = await fetch('/api/chat', {
@@ -250,7 +227,8 @@ export default function Chat() {
       });
 
       if (!res.ok) {
-        throw new Error('Failed to send message');
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to send message');
       }
 
       const reader = res.body?.getReader();
@@ -312,10 +290,54 @@ export default function Chat() {
     } catch (err) {
       autoStartQuizRef.current = false;
       setError(err instanceof Error ? err.message : 'Failed to get response');
+      setRetrySnapshot({ messages: newMessages, convId });
       setMessages(newMessages);
     } finally {
       setIsStreaming(false);
     }
+  };
+
+  const sendMessage = async (content: string) => {
+    if (!content.trim() || isStreaming) return;
+
+    const userMessage: ChatMessage = { role: 'user', content: content.trim() };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInput('');
+
+    // Create or update the conversation record for this turn.
+    let convId = activeId;
+    if (!convId) {
+      convId = newConversationId();
+      setActiveId(convId);
+      const now = Date.now();
+      upsertConversation({
+        id: convId,
+        title: conversationTitle(userMessage.content),
+        messages: newMessages,
+        quizzes: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      updateConversation(convId, (c) => ({
+        ...c,
+        messages: newMessages,
+        updatedAt: Date.now(),
+      }));
+    }
+
+    // Reset textarea height
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
+
+    await runExchange(newMessages, convId);
+  };
+
+  const handleRetry = () => {
+    if (!retrySnapshot || isStreaming) return;
+    runExchange(retrySnapshot.messages, retrySnapshot.convId);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -471,14 +493,31 @@ export default function Chat() {
       className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-danger/20 bg-danger/5 px-4 py-2.5"
     >
       <span className="text-sm text-danger">{error}</span>
-      <button
-        type="button"
-        onClick={() => setError(null)}
-        aria-label="Dismiss error"
-        className="shrink-0 cursor-pointer text-xs text-danger/70 underline transition-colors hover:text-danger"
-      >
-        Dismiss
-      </button>
+      <span className="flex shrink-0 items-center gap-3">
+        {retrySnapshot && (
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={isStreaming}
+            className="cursor-pointer rounded-md border border-danger/30 px-2.5 py-1 text-xs
+              font-medium text-danger transition-colors hover:bg-danger/10
+              disabled:pointer-events-none disabled:opacity-50"
+          >
+            Retry
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setRetrySnapshot(null);
+          }}
+          aria-label="Dismiss error"
+          className="cursor-pointer text-xs text-danger/70 underline transition-colors hover:text-danger"
+        >
+          Dismiss
+        </button>
+      </span>
     </div>
   );
 
