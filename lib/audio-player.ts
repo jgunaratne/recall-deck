@@ -131,6 +131,33 @@ export class AudioPlayer {
     source.start();
   }
 
+  /**
+   * Barge-in: drop the current source and queued buffers but keep the
+   * AudioContext alive so the model's next turn starts instantly.
+   */
+  flush(): void {
+    if (this._jitterTimer !== null) {
+      clearTimeout(this._jitterTimer);
+      this._jitterTimer = null;
+    }
+
+    if (this._currentSource) {
+      // Detach onended first so stopping doesn't chain into _playNext.
+      this._currentSource.onended = null;
+      try {
+        this._currentSource.stop();
+      } catch {
+        // Already stopped — ignore
+      }
+      this._currentSource = null;
+    }
+
+    this._queue.length = 0;
+    this._isPlaying = false;
+    this._isTurnStarted = false;
+    this.onPlaybackEnd?.();
+  }
+
   /** Stop all playback, clear the queue, and reset state. */
   stop(): void {
     if (this._jitterTimer !== null) {

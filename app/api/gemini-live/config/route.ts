@@ -1,5 +1,9 @@
 import { READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
-import { buildLiveSystemInstruction, getVoiceForLevel } from '@/lib/gemini-live-prompts';
+import {
+  buildLiveSystemInstruction,
+  generateCharacter,
+  getVoiceForLevel,
+} from '@/lib/gemini-live-prompts';
 
 export async function POST(request: Request) {
   try {
@@ -28,8 +32,9 @@ export async function POST(request: Request) {
 
     const voice = getVoiceForLevel(readingLevel);
     const systemInstruction = buildLiveSystemInstruction(topic.trim(), readingLevel);
+    const character = generateCharacter(topic.trim(), readingLevel);
 
-    return Response.json({ apiKey, voice, systemInstruction });
+    return Response.json({ apiKey, voice, systemInstruction, characterName: character.name });
   } catch (error) {
     console.error(
       'Gemini Live config error:',

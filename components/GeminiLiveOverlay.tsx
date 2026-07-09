@@ -88,16 +88,21 @@ export default function GeminiLiveOverlay({
   const [isMuted, setIsMuted] = useState(false);
   const [isMicOpen, setIsMicOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [characterName, setCharacterName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Refs for the session, recorder, and player (lazy-loaded)
   const sessionRef = useRef<import('@/lib/gemini-live-session').GeminiLiveSession | null>(null);
   const recorderRef = useRef<import('@/lib/audio-recorder').AudioRecorder | null>(null);
   const playerRef = useRef<import('@/lib/audio-player').AudioPlayer | null>(null);
+  // Cards streamed to the model as grounding context vs. cards the tutor has
+  // been asked to read aloud — separate sets, because every card becomes
+  // context as it streams in, but reading happens only when the student
+  // flips to it.
   const sentCardsRef = useRef<Set<string>>(new Set());
+  const readCardsRef = useRef<Set<string>>(new Set());
   const sentQuizRef = useRef<string | null>(null);
   const hasKickedOffRef = useRef(false);
-  const gainNodeRef = useRef<GainNode | null>(null);
 
   // Track mounted state to prevent state updates after unmount
   const mountedRef = useRef(true);
@@ -161,6 +166,10 @@ export default function GeminiLiveOverlay({
         onTurnComplete: () => {
           // Model finished speaking
         },
+        onInterrupted: () => {
+          // Barge-in: the student spoke over the tutor — drop pending audio.
+          playerRef.current?.flush();
+        },
         onError: (err) => {
           if (mountedRef.current) {
             setError(err);
@@ -172,7 +181,9 @@ export default function GeminiLiveOverlay({
       sessionRef.current = session;
       hasKickedOffRef.current = false;
       sentCardsRef.current.clear();
+      readCardsRef.current.clear();
       sentQuizRef.current = null;
+      setCharacterName(config.characterName ?? null);
 
       session.connect({
         apiKey: config.apiKey,
@@ -197,6 +208,7 @@ export default function GeminiLiveOverlay({
     playerRef.current?.stop();
     playerRef.current = null;
     sentCardsRef.current.clear();
+    readCardsRef.current.clear();
     sentQuizRef.current = null;
     hasKickedOffRef.current = false;
     if (mountedRef.current) {
@@ -214,22 +226,37 @@ export default function GeminiLiveOverlay({
     }
   }, [currentCardContent, status, connect]);
 
-  // ── Stream card content as context ─────────────────────────────────────────
+  // ── Stream card content as context (as it arrives, deduplicated) ──────────
+
+  useEffect(() => {
+    const session = sessionRef.current;
+    if (!session || status !== 'connected') return;
+
+    for (let i = 0; i < allCards.length; i++) {
+      const card = allCards[i];
+      if (!sentCardsRef.current.has(card)) {
+        sentCardsRef.current.add(card);
+        session.sendContext(`[CARD ${i + 1} CONTENT]\n${card}`);
+      }
+    }
+  }, [status, allCards]);
+
+  // ── Read the visible card aloud (kickoff on the first, then on each flip) ──
 
   useEffect(() => {
     const session = sessionRef.current;
     if (!session || status !== 'connected' || !currentCardContent) return;
+    if (readCardsRef.current.has(currentCardContent)) return;
+    readCardsRef.current.add(currentCardContent);
 
-    // Send all accumulated cards as context (deduplicated)
-    for (const card of allCards) {
-      if (!sentCardsRef.current.has(card)) {
-        sentCardsRef.current.add(card);
-        session.sendContext(`[CARD CONTENT]\n${card}`);
-      }
+    // Make sure the card being read is in context even if the context effect
+    // hasn't caught up with it yet.
+    if (!sentCardsRef.current.has(currentCardContent)) {
+      sentCardsRef.current.add(currentCardContent);
+      session.sendContext(`[CARD CONTENT]\n${currentCardContent}`);
     }
 
-    // On first connection + card, kick off the reading
-    if (!hasKickedOffRef.current && currentCardContent) {
+    if (!hasKickedOffRef.current) {
       hasKickedOffRef.current = true;
       // Small delay to let context settle
       setTimeout(() => {
@@ -237,20 +264,11 @@ export default function GeminiLiveOverlay({
           'Begin now. Start by giving a brief, enthusiastic introduction to the topic, then explain the content of the first card. Keep it conversational and engaging. Do NOT greet me or say hello.'
         );
       }, 500);
-    }
-  }, [status, currentCardContent, allCards]);
-
-  // ── Stream new card content when card changes ──────────────────────────────
-
-  useEffect(() => {
-    const session = sessionRef.current;
-    if (!session || status !== 'connected' || !currentCardContent) return;
-
-    if (!sentCardsRef.current.has(currentCardContent)) {
-      sentCardsRef.current.add(currentCardContent);
-      session.sendContext(`[CURRENT CARD - Read this next]\n${currentCardContent}`);
-      // Prompt to read the new card
-      session.sendText('A new card has appeared. Please explain the content of this new card naturally, building on what you\'ve already covered.');
+    } else {
+      session.sendContext(`[CURRENT CARD — the student just flipped to this card]\n${currentCardContent}`);
+      session.sendText(
+        'The student just moved to a new card. Explain this card\'s content naturally, building on what you\'ve already covered. Keep it brief and conversational.'
+      );
     }
   }, [currentCardContent, status]);
 
@@ -341,8 +359,8 @@ export default function GeminiLiveOverlay({
             : status === 'connecting'
               ? 'Connecting…'
               : isMuted
-                ? 'Unmute tutor'
-                : 'Mute tutor'
+                ? `Unmute ${characterName ?? 'tutor'}`
+                : `Mute ${characterName ?? 'tutor'}`
         }
         className={`relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
           transition-all duration-200
@@ -393,6 +411,13 @@ export default function GeminiLiveOverlay({
             {isMicOpen ? <MicOnIcon /> : <MicOffIcon />}
           </span>
         </button>
+      )}
+
+      {/* Character name — who is speaking */}
+      {status === 'connected' && characterName && (
+        <span className="hidden max-w-[140px] truncate text-[11px] text-text-tertiary sm:inline">
+          {characterName}
+        </span>
       )}
 
       {/* Error indicator */}

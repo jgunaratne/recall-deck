@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { QuizQuestion } from '@/lib/schema';
+import type { MasteryLevel, TopicMastery } from '@/lib/mastery';
 import AnswerButton from './AnswerButton';
 import FuseTimer from './FuseTimer';
 import Scorecard from './Scorecard';
@@ -32,10 +33,16 @@ interface QuizTakeoverProps {
   cards: string[];
   provider: string;
   readingLevel?: ReadingLevel;
+  /** Topic mastery after the quiz is recorded — shown on the scorecard. */
+  mastery?: TopicMastery | null;
+  /** Mastery level before this quiz, to celebrate level-ups. */
+  previousMasteryLevel?: MasteryLevel | null;
   onReturnToHome: () => void;
   onGoDeeper: () => void;
   onClose: () => void;
   onComplete?: (score: number, total: number) => void;
+  /** Fires when a question is shown — feeds the voice tutor's context. */
+  onQuestionShown?: (context: string) => void;
   onOpenSidebar?: () => void;
 }
 
@@ -43,7 +50,7 @@ const QUESTIONS_PER_ROUND = 5;
 const TIMER_DURATION_MS = 20000;
 const DIFFICULTIES: Array<'warmup' | 'solid' | 'spicy'> = ['warmup', 'warmup', 'solid', 'solid', 'spicy'];
 
-export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', onReturnToHome, onGoDeeper, onClose, onComplete, onOpenSidebar }: QuizTakeoverProps) {
+export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', mastery, previousMasteryLevel, onReturnToHome, onGoDeeper, onClose, onComplete, onQuestionShown, onOpenSidebar }: QuizTakeoverProps) {
   const [phase, setPhase] = useState<QuizPhase>('intro');
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -172,6 +179,19 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
       setIsLoading(false);
     }
   }, [fetchQuestion]);
+
+  // Surface each question to the voice tutor as it appears. The answer
+  // options are included, but not which one is correct — the tutor should
+  // build suspense, not blurt the answer.
+  useEffect(() => {
+    if (phase !== 'question' || !currentQuestion) return;
+    const context = [
+      `Question ${questionIndex + 1} of ${QUESTIONS_PER_ROUND} (difficulty: ${currentQuestion.difficulty}):`,
+      currentQuestion.question,
+      ...currentQuestion.answers.map((a, i) => `${String.fromCharCode(65 + i)}. ${a.text}`),
+    ].join('\n');
+    onQuestionShown?.(context);
+  }, [phase, currentQuestion, questionIndex, onQuestionShown]);
 
   // Auto-start after intro
   useEffect(() => {
@@ -507,6 +527,8 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
               score={score}
               total={QUESTIONS_PER_ROUND}
               streak={streak}
+              mastery={mastery}
+              previousLevel={previousMasteryLevel}
               onReturnToHome={onReturnToHome}
               onGoDeeper={onGoDeeper}
             />

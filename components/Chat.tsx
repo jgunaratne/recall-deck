@@ -5,6 +5,7 @@ import Message from './Message';
 import QuizTakeover from './QuizTakeover';
 import Sidebar from './Sidebar';
 import { splitIntoCards } from '@/lib/cards';
+import { computeMastery, type MasteryLevel, type TopicMastery } from '@/lib/mastery';
 import { pickTopics, type Topic } from '@/lib/topics';
 import { READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
 import {
@@ -89,6 +90,11 @@ type QuizSource = {
   cards: string[];
 };
 
+type MasteryNote = {
+  before: MasteryLevel;
+  after: TopicMastery;
+};
+
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -98,6 +104,9 @@ export default function Chat() {
   const [readingLevel, setReadingLevel] = useState<ReadingLevel>('high');
   const [showQuizButton, setShowQuizButton] = useState(false);
   const [quizSource, setQuizSource] = useState<QuizSource | null>(null);
+  const [masteryNote, setMasteryNote] = useState<MasteryNote | null>(null);
+  // Latest quiz question, streamed to the voice tutor's context window.
+  const [quizContext, setQuizContext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [visibleTopics, setVisibleTopics] = useState<Topic[]>([]);
 
@@ -326,6 +335,8 @@ export default function Chat() {
       question: userQuestion,
       cards: splitIntoCards(assistantContent),
     });
+    setMasteryNote(null);
+    setQuizContext(null);
     setShowQuizButton(false);
   };
 
@@ -339,11 +350,24 @@ export default function Chat() {
 
   const handleQuizComplete = (score: number, total: number) => {
     if (!activeId) return;
+    const existing = conversations.find((c) => c.id === activeId);
     updateConversation(activeId, (c) => ({
       ...c,
       quizzes: [...c.quizzes, { score, total, takenAt: Date.now() }],
       updatedAt: Date.now(),
     }));
+    // Snapshot mastery before/after this quiz so the scorecard can show
+    // topic development (and celebrate level-ups).
+    if (existing) {
+      const updated: Conversation = {
+        ...existing,
+        quizzes: [...existing.quizzes, { score, total, takenAt: Date.now() }],
+      };
+      setMasteryNote({
+        before: computeMastery(existing).level,
+        after: computeMastery(updated),
+      });
+    }
   };
 
   const handleQuizClose = () => {
@@ -351,11 +375,13 @@ export default function Chat() {
     setMessages([]);
     setActiveId(null);
     setShowQuizButton(false);
+    setQuizContext(null);
     setError(null);
   };
 
   const handleQuizDismiss = () => {
     setQuizSource(null);
+    setQuizContext(null);
     setError(null);
   };
 
@@ -372,6 +398,7 @@ export default function Chat() {
   const handleNewChat = () => {
     if (isStreaming) return;
     setQuizSource(null);
+    setQuizContext(null);
     setMessages([]);
     setActiveId(null);
     setShowQuizButton(false);
@@ -565,6 +592,7 @@ export default function Chat() {
                         onQuizMe={handleQuizMe}
                         topic={firstUserMsg?.content}
                         readingLevel={readingLevel}
+                        quizContext={quizContext}
                       />
                     );
                   })}
@@ -591,10 +619,13 @@ export default function Chat() {
           cards={quizSource.cards}
           provider={provider}
           readingLevel={readingLevel}
+          mastery={masteryNote?.after ?? null}
+          previousMasteryLevel={masteryNote?.before ?? null}
           onReturnToHome={handleQuizClose}
           onGoDeeper={handleQuizGoDeeper}
           onClose={handleQuizDismiss}
           onComplete={handleQuizComplete}
+          onQuestionShown={setQuizContext}
           onOpenSidebar={() => setSidebarOpen(true)}
         />
       )}

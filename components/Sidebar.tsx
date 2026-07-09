@@ -1,7 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { Conversation } from '@/lib/history';
+import {
+  computeMastery,
+  MASTERY_FILL_CLASS,
+  MASTERY_LABELS,
+  MASTERY_TEXT_CLASS,
+  type TopicMastery,
+} from '@/lib/mastery';
 import { READING_LEVELS, READING_LEVEL_LABELS, type ReadingLevel } from '@/lib/prompts';
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -126,6 +133,101 @@ function GraduationCapIcon() {
   );
 }
 
+function CircleCheckIcon({ className }: { className?: string }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+/**
+ * LeetCode-style topic status: green check when mastered, otherwise a
+ * progress ring that fills as quiz accuracy improves.
+ */
+function MasteryIndicator({ mastery }: { mastery: TopicMastery }) {
+  if (mastery.level === 'mastered') {
+    return <CircleCheckIcon className="text-emerald-600" />;
+  }
+  const r = 5.5;
+  const circumference = 2 * Math.PI * r;
+  const ringTone =
+    mastery.level === 'proficient'
+      ? 'text-emerald-500'
+      : mastery.level === 'developing'
+        ? 'text-amber-500'
+        : 'text-accent';
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" className={`-rotate-90 ${ringTone}`}>
+      <circle cx="7.5" cy="7.5" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" />
+      {mastery.score > 0 && (
+        <circle
+          cx="7.5"
+          cy="7.5"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray={`${Math.max(0.5, mastery.score * circumference)} ${circumference}`}
+          className="transition-all duration-500"
+        />
+      )}
+    </svg>
+  );
+}
+
+/** Filled pips for study depth — each deep dive adds one. */
+function DepthPips({ depth }: { depth: number }) {
+  const shown = Math.min(depth, 4);
+  return (
+    <span className="flex items-center gap-[3px]" title={`Depth ${depth} — each deep dive adds a level`}>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <span
+          key={i}
+          className={`h-1 w-1 rounded-full ${i < shown ? 'bg-accent/70' : 'bg-border-subtle'}`}
+        />
+      ))}
+      {depth > 4 && <span className="text-[10px] text-text-tertiary">+{depth - 4}</span>}
+    </span>
+  );
+}
+
+/** Lexia-style development panel shown when a topic row is expanded. */
+function MasteryPanel({ mastery }: { mastery: TopicMastery }) {
+  return (
+    <div className="mx-2 mb-1 flex flex-col gap-1.5 rounded-md border border-border-soft bg-surface p-2">
+      <div className="flex items-center justify-between">
+        <span className={`text-[11px] font-semibold ${MASTERY_TEXT_CLASS[mastery.level]}`}>
+          {MASTERY_LABELS[mastery.level]}
+          {mastery.trend === 'improving' && ' ↑'}
+          {mastery.trend === 'slipping' && ' ↓'}
+        </span>
+        {mastery.accuracy !== null && (
+          <span className="text-[11px] tabular-nums text-text-tertiary">
+            {Math.round(mastery.accuracy * 100)}%
+          </span>
+        )}
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-border-subtle">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${MASTERY_FILL_CLASS[mastery.level]}`}
+          style={{ width: `${Math.round(mastery.score * 100)}%` }}
+        />
+      </div>
+      <div className="flex items-center gap-2 text-[10px] text-text-tertiary">
+        <DepthPips depth={mastery.depth} />
+        <span>
+          {mastery.cardsStudied} card{mastery.cardsStudied === 1 ? '' : 's'} ·{' '}
+          {mastery.quizzesTaken} quiz{mastery.quizzesTaken === 1 ? '' : 'zes'}
+        </span>
+      </div>
+      <p className="text-[11px] leading-snug text-text-secondary">{mastery.feedback}</p>
+    </div>
+  );
+}
+
 function quizTone(score: number, total: number): string {
   if (score === total) return 'text-emerald-700';
   if (score === 0) return 'text-rose-700';
@@ -141,13 +243,15 @@ type SidebarItemProps = {
 
 function SidebarItem({ conversation, active, onSelect, onDelete }: SidebarItemProps) {
   const [expanded, setExpanded] = useState(false);
+  const mastery = useMemo(() => computeMastery(conversation), [conversation]);
 
   // The title is the first question; children are follow-up questions + quizzes.
   const followUps = conversation.messages
     .filter((m) => m.role === 'user')
     .slice(1)
     .map((m) => m.content.trim().split('\n')[0]);
-  const hasChildren = followUps.length > 0 || conversation.quizzes.length > 0;
+  const hasChildren =
+    followUps.length > 0 || conversation.quizzes.length > 0 || mastery.level !== 'not-started';
 
   return (
     <li className="group/item relative flex flex-col">
@@ -174,6 +278,15 @@ function SidebarItem({ conversation, active, onSelect, onDelete }: SidebarItemPr
         >
           <span className="grow truncate leading-5">{conversation.title}</span>
         </button>
+        {mastery.level !== 'not-started' && (
+          <span
+            aria-label={`${MASTERY_LABELS[mastery.level]} — ${mastery.feedback}`}
+            className="pointer-events-none absolute right-2 top-2 flex items-center transition-opacity
+              group-hover/item:opacity-0 group-focus-within/item:opacity-0"
+          >
+            <MasteryIndicator mastery={mastery} />
+          </span>
+        )}
         <button
           type="button"
           aria-label="Delete conversation"
@@ -188,6 +301,9 @@ function SidebarItem({ conversation, active, onSelect, onDelete }: SidebarItemPr
 
       {expanded && hasChildren && (
         <ul className="m-0 flex list-none flex-col gap-px p-0 pl-7">
+          <li key="mastery">
+            <MasteryPanel mastery={mastery} />
+          </li>
           {followUps.map((q, i) => (
             <li key={`q-${i}`}>
               <button
@@ -247,6 +363,11 @@ export default function Sidebar({
   onProviderChange,
   onReadingLevelChange,
 }: SidebarProps) {
+  const masteredCount = useMemo(
+    () => conversations.filter((c) => computeMastery(c).level === 'mastered').length,
+    [conversations],
+  );
+
   return (
     <>
       {/* Backdrop */}
@@ -303,8 +424,19 @@ export default function Sidebar({
         <div className="mt-5 flex grow flex-col overflow-y-auto px-2">
           {conversations.length > 0 ? (
             <>
-              <div className="truncate px-2 pb-1.5 text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
-                Recents
+              <div className="flex items-center justify-between px-2 pb-1.5">
+                <span className="truncate text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
+                  Recents
+                </span>
+                {masteredCount > 0 && (
+                  <span
+                    className="flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-emerald-700"
+                    title={`${masteredCount} of ${conversations.length} topics mastered`}
+                  >
+                    <CircleCheckIcon className="h-3 w-3" />
+                    {masteredCount}/{conversations.length}
+                  </span>
+                )}
               </div>
               <ul className="m-0 flex list-none flex-col gap-px p-0">
                 {conversations.map((c) => (

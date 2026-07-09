@@ -32,6 +32,8 @@ export interface GeminiLiveCallbacks {
   onAudioChunk?: (base64Pcm: string) => void;
   onTextChunk?: (text: string) => void;
   onTurnComplete?: () => void;
+  /** Barge-in: the server cut the model off because the user spoke. */
+  onInterrupted?: () => void;
   onError?: (error: string) => void;
 }
 
@@ -42,7 +44,10 @@ export interface GeminiLiveCallbacks {
 const WS_BASE =
   'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 
-const MODEL = 'models/gemini-2.5-flash-live-001';
+const MODEL = 'models/gemini-3.1-flash-live-preview';
+
+/** Max automatic reconnects after a server GoAway before giving up. */
+const MAX_GOAWAY_RECONNECTS = 3;
 
 /** Interval (ms) between keepalive silent frames. */
 const KEEPALIVE_INTERVAL_MS = 15_000;
@@ -73,12 +78,20 @@ interface ServerContentPart {
 
 interface ServerMessage {
   setupComplete?: Record<string, unknown>;
+  goAway?: Record<string, unknown>;
   serverContent?: {
     modelTurn?: {
       parts?: ServerContentPart[];
     };
     turnComplete?: boolean;
+    interrupted?: boolean;
   };
+}
+
+export interface GeminiLiveConfig {
+  apiKey: string;
+  systemInstruction: string;
+  voice?: GeminiVoice;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +103,13 @@ export class GeminiLiveSession {
   private ws: WebSocket | null = null;
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private readonly callbacks: GeminiLiveCallbacks;
+
+  // GoAway reconnection (podchat/Hansel pattern): the server periodically asks
+  // long-lived connections to reconnect. We remember the last config and dial
+  // back in transparently instead of surfacing an error.
+  private lastConfig: GeminiLiveConfig | null = null;
+  private goAwayReceived = false;
+  private reconnectAttempts = 0;
 
   constructor(callbacks: GeminiLiveCallbacks) {
     this.callbacks = callbacks;
@@ -107,16 +127,14 @@ export class GeminiLiveSession {
    * Open a WebSocket to Gemini Live and send the setup message.
    * The caller is responsible for obtaining the API key from the server.
    */
-  connect(config: {
-    apiKey: string;
-    systemInstruction: string;
-    voice?: GeminiVoice;
-  }): void {
+  connect(config: GeminiLiveConfig): void {
     // Prevent double-connect
     if (this.ws) {
       this.disconnect();
     }
 
+    this.lastConfig = config;
+    this.goAwayReceived = false;
     this.setStatus('connecting');
 
     const url = `${WS_BASE}?key=${encodeURIComponent(config.apiKey)}`;
@@ -138,11 +156,19 @@ export class GeminiLiveSession {
 
     ws.addEventListener('close', (event: CloseEvent) => {
       this.stopKeepalive();
+      this.ws = null;
+
+      // Server-initiated GoAway — reconnect with the same config.
+      if (this.goAwayReceived && this.lastConfig && this.reconnectAttempts < MAX_GOAWAY_RECONNECTS) {
+        this.reconnectAttempts += 1;
+        this.connect(this.lastConfig);
+        return;
+      }
+
       if (this._status === 'connected' || this._status === 'connecting') {
         const reason = event.reason || `Connection closed (code ${event.code})`;
         this.handleError(reason);
       }
-      this.ws = null;
     });
 
     this.ws = ws;
@@ -183,6 +209,9 @@ export class GeminiLiveSession {
   /** Tear down the connection and all timers. */
   disconnect(): void {
     this.stopKeepalive();
+    this.lastConfig = null;
+    this.goAwayReceived = false;
+    this.reconnectAttempts = 0;
 
     if (this.ws) {
       // Remove listeners before closing to avoid the close handler
@@ -252,7 +281,14 @@ export class GeminiLiveSession {
 
     // 1. Setup acknowledgement
     if (msg.setupComplete !== undefined) {
+      this.reconnectAttempts = 0;
       this.setStatus('connected');
+      return;
+    }
+
+    // GoAway — the server wants us to reconnect; the close handler follows.
+    if (msg.goAway !== undefined) {
+      this.goAwayReceived = true;
       return;
     }
 
@@ -273,6 +309,11 @@ export class GeminiLiveSession {
 
     if (content.turnComplete) {
       this.callbacks.onTurnComplete?.();
+    }
+
+    // Barge-in: the user spoke over the model — playback should be flushed.
+    if (content.interrupted) {
+      this.callbacks.onInterrupted?.();
     }
   }
 

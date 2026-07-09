@@ -1,16 +1,29 @@
 'use client';
 
 import React from 'react';
+import {
+  MASTERY_FILL_CLASS,
+  MASTERY_LABELS,
+  MASTERY_TEXT_CLASS,
+  type MasteryLevel,
+  type TopicMastery,
+} from '@/lib/mastery';
 
 interface ScorecardProps {
   score: number;
   total: number;
   streak: number;
+  /** Topic mastery after this quiz was recorded. */
+  mastery?: TopicMastery | null;
+  /** Mastery level before this quiz, to celebrate level-ups. */
+  previousLevel?: MasteryLevel | null;
   onReturnToHome: () => void;
   onGoDeeper: () => void;
 }
 
-export default function Scorecard({ score, total, streak, onReturnToHome, onGoDeeper }: ScorecardProps) {
+const LEVEL_ORDER: MasteryLevel[] = ['not-started', 'learning', 'developing', 'proficient', 'mastered'];
+
+export default function Scorecard({ score, total, streak, mastery, previousLevel, onReturnToHome, onGoDeeper }: ScorecardProps) {
   const percentage = Math.round((score / total) * 100);
   const isPerfect = score === total;
   const isZero = score === 0;
@@ -78,6 +91,31 @@ export default function Scorecard({ score, total, streak, onReturnToHome, onGoDe
         <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
           Streak · {streak} in a row
         </span>
+      )}
+
+      {/* Topic mastery development */}
+      {mastery && (
+        <div className="flex w-full flex-col gap-2 rounded-lg border border-border-soft bg-page/50 p-3 text-left">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
+              Topic mastery
+            </span>
+            <span className={`text-xs font-semibold ${MASTERY_TEXT_CLASS[mastery.level]}`}>
+              {previousLevel &&
+              previousLevel !== mastery.level &&
+              LEVEL_ORDER.indexOf(mastery.level) > LEVEL_ORDER.indexOf(previousLevel)
+                ? `${MASTERY_LABELS[previousLevel]} → ${MASTERY_LABELS[mastery.level]}`
+                : MASTERY_LABELS[mastery.level]}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-border-subtle">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ease-out ${MASTERY_FILL_CLASS[mastery.level]}`}
+              style={{ width: `${Math.round(mastery.score * 100)}%` }}
+            />
+          </div>
+          <p className="text-xs leading-relaxed text-text-secondary">{mastery.feedback}</p>
+        </div>
       )}
 
       {/* Action buttons */}

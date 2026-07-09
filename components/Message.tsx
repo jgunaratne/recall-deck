@@ -454,7 +454,9 @@ export default function Message({
               <span className="text-xs font-medium uppercase tracking-wide text-text-tertiary">
                 Lecture notes
               </span>
-              {topic && (
+              {/* Voice tutor lives on the latest lecture only — one Live
+                  session at a time, following the newest cards. */}
+              {topic && isLastMessage && (
                 <GeminiLiveOverlay
                   topic={topic}
                   readingLevel={readingLevel}
