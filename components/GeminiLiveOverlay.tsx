@@ -325,9 +325,12 @@ export default function GeminiLiveOverlay({
     if (status !== 'connected') return;
 
     if (isMicOpen) {
-      // Close mic
+      // Close mic — and tell the server the audio stream ended, so voice
+      // activity detection commits the user's turn instead of waiting for
+      // trailing silence that will never arrive.
       recorderRef.current?.stop();
       recorderRef.current = null;
+      sessionRef.current?.sendAudioStreamEnd();
       setIsMicOpen(false);
     } else {
       // Open mic
@@ -338,12 +341,29 @@ export default function GeminiLiveOverlay({
           sessionRef.current?.sendAudio(base64Chunk);
         });
         recorderRef.current = recorder;
+        setError(null);
         setIsMicOpen(true);
       } catch (err) {
-        setError('Microphone access denied');
+        setError(
+          err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'SecurityError')
+            ? 'Microphone access denied'
+            : err instanceof Error
+              ? err.message
+              : 'Microphone unavailable',
+        );
       }
     }
   }, [status, isMicOpen]);
+
+  // If the session drops while the mic is open, stop capturing — otherwise
+  // the recorder keeps streaming into a dead session and the mic UI is gone.
+  useEffect(() => {
+    if (status !== 'connected' && recorderRef.current) {
+      recorderRef.current.stop();
+      recorderRef.current = null;
+      setIsMicOpen(false);
+    }
+  }, [status]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
 

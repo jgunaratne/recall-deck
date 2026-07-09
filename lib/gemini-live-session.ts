@@ -90,11 +90,15 @@ export class GeminiLiveSession {
   private readonly callbacks: GeminiLiveCallbacks;
 
   // GoAway reconnection: the server periodically asks long-lived connections
-  // to reconnect. We remember the last config and dial back in transparently.
+  // to reconnect. We remember the last config and dial back in transparently,
+  // passing the resumption handle so the conversation context survives.
   private lastConfig: GeminiLiveConfig | null = null;
   private goAwayReceived = false;
   private reconnectAttempts = 0;
   private sessionEpoch = 0;
+  private resumptionHandle: string | null = null;
+  /** Timestamp of the last real audio frame — keepalive backs off while the mic streams. */
+  private lastAudioSentAt = 0;
 
   constructor(callbacks: GeminiLiveCallbacks) {
     this.callbacks = callbacks;
@@ -113,9 +117,17 @@ export class GeminiLiveSession {
    * The caller is responsible for obtaining the API key from the server.
    */
   async connect(config: GeminiLiveConfig): Promise<void> {
+    return this.doConnect(config, false);
+  }
+
+  private async doConnect(config: GeminiLiveConfig, isReconnect: boolean): Promise<void> {
     // Prevent double-connect
-    if (this.session) {
-      this.disconnect();
+    this.teardownSession();
+
+    if (!isReconnect) {
+      // Fresh conversation — don't restore a previous session's context.
+      this.resumptionHandle = null;
+      this.reconnectAttempts = 0;
     }
 
     this.lastConfig = config;
@@ -147,6 +159,12 @@ export class GeminiLiveSession {
             prefixPaddingMs: 100,
           },
         },
+        // The server periodically recycles long-lived connections (GoAway)
+        // and hard-caps session duration. Resumption lets us dial back in
+        // with the full conversation state intact; sliding-window compression
+        // lifts the context-size cap so one session spans lecture + quiz.
+        sessionResumption: this.resumptionHandle ? { handle: this.resumptionHandle } : {},
+        contextWindowCompression: { slidingWindow: {} },
       };
 
       // Connect with timeout (matching hansel pattern)
@@ -179,11 +197,12 @@ export class GeminiLiveSession {
               return;
             }
 
-            // Attempt transparent reconnection on GoAway
+            // Attempt transparent reconnection on GoAway, resuming the
+            // previous session's context via the resumption handle.
             if (this.lastConfig && this.reconnectAttempts < MAX_GOAWAY_RECONNECTS) {
               this.goAwayReceived = false;
               this.reconnectAttempts++;
-              this.connect(this.lastConfig);
+              this.doConnect(this.lastConfig, true);
               return;
             }
 
@@ -215,9 +234,25 @@ export class GeminiLiveSession {
   sendAudio(base64Data: string): void {
     if (!this.session) return;
     try {
+      this.lastAudioSentAt = Date.now();
       this.session.sendRealtimeInput({
         audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' },
       });
+    } catch {
+      // session may be closing
+    }
+  }
+
+  /**
+   * Tell the server the mic was turned off. Without this, automatic activity
+   * detection keeps waiting for trailing silence *audio* to commit
+   * end-of-speech — silence that never arrives once the stream stops — and
+   * the model never responds to what the user just said.
+   */
+  sendAudioStreamEnd(): void {
+    if (!this.session) return;
+    try {
+      this.session.sendRealtimeInput({ audioStreamEnd: true });
     } catch {
       // session may be closing
     }
@@ -264,10 +299,21 @@ export class GeminiLiveSession {
 
   /** Tear down the connection and all timers. */
   disconnect(): void {
-    this.stopKeepalive();
+    this.teardownSession();
     this.lastConfig = null;
     this.goAwayReceived = false;
     this.reconnectAttempts = 0;
+    this.resumptionHandle = null;
+    this.setStatus('idle');
+  }
+
+  /**
+   * Close the underlying socket and timers without resetting reconnect
+   * bookkeeping — used both by disconnect() and by GoAway reconnects, which
+   * must keep the attempt counter and resumption handle.
+   */
+  private teardownSession(): void {
+    this.stopKeepalive();
     this.sessionEpoch++;
 
     if (this.session) {
@@ -281,7 +327,6 @@ export class GeminiLiveSession {
     }
 
     this.client = null;
-    this.setStatus('idle');
   }
 
   // -----------------------------------------------------------------------
@@ -298,6 +343,16 @@ export class GeminiLiveSession {
     // GoAway — the server wants us to reconnect; the close handler follows.
     if (msg?.goAway !== undefined) {
       this.goAwayReceived = true;
+      return;
+    }
+
+    // Session resumption checkpoint — remember the latest resumable handle
+    // so a GoAway reconnect restores the conversation instead of starting over.
+    if (msg?.sessionResumptionUpdate !== undefined) {
+      const update = msg.sessionResumptionUpdate;
+      if (update?.resumable && update?.newHandle) {
+        this.resumptionHandle = update.newHandle;
+      }
       return;
     }
 
@@ -339,6 +394,9 @@ export class GeminiLiveSession {
   private startKeepalive(): void {
     this.stopKeepalive();
     this.keepaliveTimer = setInterval(() => {
+      // Skip while real mic audio is flowing — injecting silent frames into
+      // the middle of live speech corrupts the stream the VAD is analyzing.
+      if (Date.now() - this.lastAudioSentAt < KEEPALIVE_INTERVAL_MS) return;
       this.sendAudio(SILENT_FRAME_BASE64);
     }, KEEPALIVE_INTERVAL_MS);
   }

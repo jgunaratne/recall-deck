@@ -24,6 +24,31 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+/**
+ * Linear-interpolation downsample. Gemini Live requires 16 kHz input; if the
+ * browser refuses to run the AudioContext at 16 kHz (Safari, some hardware),
+ * the captured audio would otherwise be sent at the wrong rate — the API
+ * would "hear" slowed-down rumble and never detect speech.
+ */
+export function downsample(
+  input: Float32Array,
+  fromRate: number,
+  toRate: number,
+): Float32Array {
+  if (fromRate === toRate) return input;
+  const ratio = fromRate / toRate;
+  const outLength = Math.floor(input.length / ratio);
+  const out = new Float32Array(outLength);
+  for (let i = 0; i < outLength; i++) {
+    const pos = i * ratio;
+    const idx = Math.floor(pos);
+    const frac = pos - idx;
+    const next = idx + 1 < input.length ? input[idx + 1] : input[idx];
+    out[i] = input[idx] * (1 - frac) + next * frac;
+  }
+  return out;
+}
+
 export class AudioRecorder {
   private _audioContext: AudioContext | null = null;
   private _stream: MediaStream | null = null;
@@ -51,49 +76,76 @@ export class AudioRecorder {
   async start(onData: (base64: string) => void): Promise<void> {
     if (this._isRecording) return;
 
-    this._audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+    try {
+      // Create the context first, while the user-gesture activation that
+      // triggered this call is still fresh — getUserMedia may show a
+      // permission prompt that outlives the activation window.
+      try {
+        this._audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+      } catch {
+        // Some browsers reject a forced 16 kHz rate; capture at the native
+        // rate and downsample per-chunk instead.
+        this._audioContext = new AudioContext();
+      }
 
-    this._stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        sampleRate: SAMPLE_RATE,
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-      },
-    });
+      // Autoplay policy can leave the context suspended. A suspended context
+      // never fires onaudioprocess, so the mic would look live (red button,
+      // permission granted) while sending nothing at all.
+      if (this._audioContext.state !== 'running') {
+        await this._audioContext.resume();
+      }
+      if ((this._audioContext.state as string) !== 'running') {
+        throw new Error('Audio capture could not start — try clicking the mic again');
+      }
 
-    this._sourceNode = this._audioContext.createMediaStreamSource(this._stream);
+      this._stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: SAMPLE_RATE,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
 
-    // Analyser for visualization (e.g. volume meters)
-    this._analyser = this._audioContext.createAnalyser();
-    this._analyser.fftSize = 256;
-    this._sourceNode.connect(this._analyser);
+      this._sourceNode = this._audioContext.createMediaStreamSource(this._stream);
 
-    // ScriptProcessor to capture raw PCM data
-    this._processorNode = this._audioContext.createScriptProcessor(
-      BUFFER_SIZE,
-      1, // mono input
-      1, // mono output
-    );
+      // Analyser for visualization (e.g. volume meters)
+      this._analyser = this._audioContext.createAnalyser();
+      this._analyser.fftSize = 256;
+      this._sourceNode.connect(this._analyser);
 
-    this._processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
-      if (!this._isRecording) return;
-      const inputData = event.inputBuffer.getChannelData(0);
-      const int16Data = float32ToInt16(inputData);
-      const base64 = arrayBufferToBase64(int16Data.buffer as ArrayBuffer);
-      onData(base64);
-    };
+      // ScriptProcessor to capture raw PCM data
+      this._processorNode = this._audioContext.createScriptProcessor(
+        BUFFER_SIZE,
+        1, // mono input
+        1, // mono output
+      );
 
-    // Silent gain node — prevents raw mic audio from playing through speakers
-    this._gainNode = this._audioContext.createGain();
-    this._gainNode.gain.value = 0;
+      const contextRate = this._audioContext.sampleRate;
+      this._processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
+        if (!this._isRecording) return;
+        const inputData = event.inputBuffer.getChannelData(0);
+        const resampled = downsample(inputData, contextRate, SAMPLE_RATE);
+        const int16Data = float32ToInt16(resampled);
+        const base64 = arrayBufferToBase64(int16Data.buffer as ArrayBuffer);
+        onData(base64);
+      };
 
-    // Wire: source → processor → silent gain → destination
-    this._sourceNode.connect(this._processorNode);
-    this._processorNode.connect(this._gainNode);
-    this._gainNode.connect(this._audioContext.destination);
+      // Silent gain node — prevents raw mic audio from playing through speakers
+      this._gainNode = this._audioContext.createGain();
+      this._gainNode.gain.value = 0;
 
-    this._isRecording = true;
+      // Wire: source → processor → silent gain → destination
+      this._sourceNode.connect(this._processorNode);
+      this._processorNode.connect(this._gainNode);
+      this._gainNode.connect(this._audioContext.destination);
+
+      this._isRecording = true;
+    } catch (err) {
+      // Don't leak a half-built audio graph (open mic track, running context)
+      this.stop();
+      throw err;
+    }
   }
 
   /** Stop recording and release all resources. */
