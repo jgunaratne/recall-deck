@@ -186,7 +186,14 @@ export class GeminiLiveSession {
     });
   }
 
-  /** Send a context update without triggering a model response. */
+  /**
+   * Seed context without triggering a model response.
+   *
+   * Gemini 3.1 Live only honours `clientContent` for seeding the initial
+   * history — once the conversation has started it is ignored. Callers must
+   * only use this before the first `sendText`; after that, fold context into
+   * the `sendText` message itself.
+   */
   sendContext(text: string): void {
     this.send({
       clientContent: {
@@ -198,11 +205,10 @@ export class GeminiLiveSession {
 
   /** Send text that triggers a model response. */
   sendText(text: string): void {
+    // Gemini 3.1 Live requires `realtimeInput` for text once the conversation
+    // is underway (`clientContent` is seeding-only and silently dropped).
     this.send({
-      clientContent: {
-        turns: [{ role: 'user', parts: [{ text }] }],
-        turnComplete: true,
-      },
+      realtimeInput: { text },
     });
   }
 

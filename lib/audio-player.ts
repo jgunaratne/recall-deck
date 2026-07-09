@@ -64,6 +64,11 @@ export class AudioPlayer {
       this._gainNode.gain.value = MAKEUP_GAIN;
       this._gainNode.connect(this._audioContext.destination);
     }
+    // Autoplay policy can leave the context suspended when it was created
+    // outside a user gesture — resume opportunistically before playback.
+    if (this._audioContext.state === 'suspended') {
+      void this._audioContext.resume();
+    }
     return this._audioContext;
   }
 

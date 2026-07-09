@@ -226,11 +226,14 @@ export default function GeminiLiveOverlay({
     }
   }, [currentCardContent, status, connect]);
 
-  // ── Stream card content as context (as it arrives, deduplicated) ──────────
+  // ── Seed card content as context before the conversation starts ───────────
+  // Gemini 3.1 Live only accepts `clientContent` context while seeding the
+  // initial history; once the tutor has spoken, card content must travel
+  // inside the `sendText` messages below instead.
 
   useEffect(() => {
     const session = sessionRef.current;
-    if (!session || status !== 'connected') return;
+    if (!session || status !== 'connected' || hasKickedOffRef.current) return;
 
     for (let i = 0; i < allCards.length; i++) {
       const card = allCards[i];
@@ -248,26 +251,19 @@ export default function GeminiLiveOverlay({
     if (!session || status !== 'connected' || !currentCardContent) return;
     if (readCardsRef.current.has(currentCardContent)) return;
     readCardsRef.current.add(currentCardContent);
-
-    // Make sure the card being read is in context even if the context effect
-    // hasn't caught up with it yet.
-    if (!sentCardsRef.current.has(currentCardContent)) {
-      sentCardsRef.current.add(currentCardContent);
-      session.sendContext(`[CARD CONTENT]\n${currentCardContent}`);
-    }
+    sentCardsRef.current.add(currentCardContent);
 
     if (!hasKickedOffRef.current) {
       hasKickedOffRef.current = true;
-      // Small delay to let context settle
+      // Small delay to let the seeded context settle
       setTimeout(() => {
         session.sendText(
-          'Begin now. Start by giving a brief, enthusiastic introduction to the topic, then explain the content of the first card. Keep it conversational and engaging. Do NOT greet me or say hello.'
+          `[FIRST CARD]\n${currentCardContent}\n\nBegin now. Start by giving a brief, enthusiastic introduction to the topic, then explain the content of this first card. Keep it conversational and engaging. Do NOT greet me or say hello.`
         );
       }, 500);
     } else {
-      session.sendContext(`[CURRENT CARD — the student just flipped to this card]\n${currentCardContent}`);
       session.sendText(
-        'The student just moved to a new card. Explain this card\'s content naturally, building on what you\'ve already covered. Keep it brief and conversational.'
+        `[CURRENT CARD — the student just flipped to this card]\n${currentCardContent}\n\nThe student just moved to this card. Explain its content naturally, building on what you've already covered. Keep it brief and conversational.`
       );
     }
   }, [currentCardContent, status]);
@@ -280,8 +276,9 @@ export default function GeminiLiveOverlay({
     if (sentQuizRef.current === quizContext) return;
 
     sentQuizRef.current = quizContext;
-    session.sendContext(`[QUIZ QUESTION]\n${quizContext}`);
-    session.sendText('A quiz question has appeared! Read it out loud engagingly and let the student think about the answer.');
+    session.sendText(
+      `[QUIZ QUESTION]\n${quizContext}\n\nA quiz question has appeared! Read it out loud engagingly and let the student think about the answer. Do not reveal the correct answer.`
+    );
   }, [quizContext, status]);
 
   // ── Mute / Unmute speaker ──────────────────────────────────────────────────
