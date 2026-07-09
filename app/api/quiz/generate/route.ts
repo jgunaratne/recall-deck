@@ -1,6 +1,11 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
 import { getGeminiClient, GEMINI_MODELS } from '@/lib/gemini';
-import { getQuizGenerationSystemPrompt, getQuizGenerationUserPrompt } from '@/lib/prompts';
+import {
+  getQuizGenerationSystemPrompt,
+  getQuizGenerationUserPrompt,
+  READING_LEVELS,
+  type ReadingLevel,
+} from '@/lib/prompts';
 import { QuizQuestionSchema, validateQuizQuestion, QUIZ_QUESTION_JSON_SCHEMA } from '@/lib/schema';
 import { shuffleArray } from '@/lib/shuffle';
 import { resolveProvider } from '@/lib/provider';
@@ -61,6 +66,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { transcript, difficulty = 'solid' } = body;
     const provider = resolveProvider(body);
+    const readingLevel: ReadingLevel = READING_LEVELS.includes(body.readingLevel)
+      ? body.readingLevel
+      : 'high';
 
     if (!transcript || typeof transcript !== 'string') {
       return new Response(JSON.stringify({ error: 'Transcript is required' }), {
@@ -92,7 +100,7 @@ export async function POST(req: Request) {
           },
         ],
         config: {
-          systemInstruction: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'spicy'),
+          systemInstruction: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'spicy', readingLevel),
           responseMimeType: 'application/json',
           responseSchema: GEMINI_QUIZ_QUESTION_SCHEMA,
         },
@@ -111,7 +119,7 @@ export async function POST(req: Request) {
       const response = await client.messages.create({
         model: MODELS.QUIZ_GENERATE,
         max_tokens: 1024,
-        system: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'spicy'),
+        system: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'spicy', readingLevel),
         messages: [
           {
             role: 'user',

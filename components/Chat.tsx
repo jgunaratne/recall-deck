@@ -5,6 +5,7 @@ import Message from './Message';
 import QuizTakeover from './QuizTakeover';
 import Sidebar from './Sidebar';
 import { splitIntoCards } from '@/lib/cards';
+import { READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
 import {
   type ChatMessage,
   type Conversation,
@@ -87,6 +88,7 @@ export default function Chat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [provider, setProvider] = useState('gemini');
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
+  const [readingLevel, setReadingLevel] = useState<ReadingLevel>('high');
   const [showQuizButton, setShowQuizButton] = useState(false);
   const [quizSource, setQuizSource] = useState<QuizSource | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,9 +128,26 @@ export default function Chat() {
       .catch((err) => console.error('Failed to load providers:', err));
   }, []);
 
+  // Restore the saved reading level after mount (deferred so hydration
+  // renders the same default the server did).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const saved = localStorage.getItem('recalldeck_reading_level') as ReadingLevel | null;
+      if (saved && READING_LEVELS.includes(saved)) {
+        setReadingLevel(saved);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
     localStorage.setItem('recalldeck_provider', newProvider);
+  };
+
+  const handleReadingLevelChange = (level: ReadingLevel) => {
+    setReadingLevel(level);
+    localStorage.setItem('recalldeck_reading_level', level);
   };
 
   // Auto-scroll: always on a newly sent/received message, but during
@@ -205,6 +224,7 @@ export default function Chat() {
         body: JSON.stringify({
           messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
           provider,
+          readingLevel,
         }),
       });
 
@@ -403,12 +423,14 @@ export default function Chat() {
           mobileOpen={mobileSidebarOpen}
           providers={availableProviders}
           provider={provider}
+          readingLevel={readingLevel}
           onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
           onCloseMobile={() => setMobileSidebarOpen(false)}
           onNewChat={handleNewChat}
           onSelect={handleSelectConversation}
           onDelete={handleDeleteConversation}
           onProviderChange={handleProviderChange}
+          onReadingLevelChange={handleReadingLevelChange}
         />
 
         <div
@@ -520,6 +542,7 @@ export default function Chat() {
           question={quizSource.question}
           cards={quizSource.cards}
           provider={provider}
+          readingLevel={readingLevel}
           onClose={handleQuizClose}
           onComplete={handleQuizComplete}
         />

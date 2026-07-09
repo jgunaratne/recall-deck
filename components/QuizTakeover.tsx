@@ -5,7 +5,7 @@ import type { QuizQuestion } from '@/lib/schema';
 import AnswerButton from './AnswerButton';
 import FuseTimer from './FuseTimer';
 import Scorecard from './Scorecard';
-import { PROFESSOR_INTRO_LINES } from '@/lib/prompts';
+import { PROFESSOR_INTRO_LINES, type ReadingLevel } from '@/lib/prompts';
 
 function Spinner() {
   // Sync to global clock so the animation continues smoothly across remounts.
@@ -31,6 +31,7 @@ interface QuizTakeoverProps {
   /** Lecture card contents — each quiz question is grounded in one card. */
   cards: string[];
   provider: string;
+  readingLevel?: ReadingLevel;
   onClose: () => void;
   onComplete?: (score: number, total: number) => void;
 }
@@ -39,7 +40,7 @@ const QUESTIONS_PER_ROUND = 3;
 const TIMER_DURATION_MS = 20000;
 const DIFFICULTIES: Array<'warmup' | 'solid' | 'spicy'> = ['warmup', 'solid', 'spicy'];
 
-export default function QuizTakeover({ question, cards, provider, onClose, onComplete }: QuizTakeoverProps) {
+export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', onClose, onComplete }: QuizTakeoverProps) {
   const [phase, setPhase] = useState<QuizPhase>('intro');
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -74,7 +75,7 @@ export default function QuizTakeover({ question, cards, provider, onClose, onCom
       const res = await fetch('/api/quiz/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, difficulty, provider }),
+        body: JSON.stringify({ transcript, difficulty, provider, readingLevel }),
       });
 
       if (!res.ok) {
@@ -83,7 +84,7 @@ export default function QuizTakeover({ question, cards, provider, onClose, onCom
 
       return res.json();
     },
-    [question, cards, provider]
+    [question, cards, provider, readingLevel]
   );
 
   // Stream Monty's reaction

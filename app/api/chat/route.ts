@@ -1,6 +1,6 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
 import { getGeminiClient, GEMINI_MODELS } from '@/lib/gemini';
-import { CHAT_SYSTEM_PROMPT } from '@/lib/prompts';
+import { getChatSystemPrompt, READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
 import { resolveProvider } from '@/lib/provider';
 
 export const runtime = 'nodejs';
@@ -10,6 +10,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const messages = body.messages;
     const provider = resolveProvider(body);
+    const readingLevel: ReadingLevel = READING_LEVELS.includes(body.readingLevel)
+      ? body.readingLevel
+      : 'high';
+    const systemPrompt = getChatSystemPrompt(readingLevel);
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: 'Messages array is required' }), {
@@ -51,7 +55,7 @@ export async function POST(req: Request) {
         model: GEMINI_MODELS.CHAT,
         contents,
         config: {
-          systemInstruction: CHAT_SYSTEM_PROMPT,
+          systemInstruction: systemPrompt,
         },
       });
 
@@ -82,7 +86,7 @@ export async function POST(req: Request) {
       const stream = await client.messages.stream({
         model: MODELS.CHAT,
         max_tokens: 2048,
-        system: CHAT_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: messages.map((m: { role: string; content: string }) => ({
           role: m.role as 'user' | 'assistant',
           content: m.content,

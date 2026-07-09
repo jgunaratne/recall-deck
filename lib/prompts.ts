@@ -1,3 +1,32 @@
+export type ReadingLevel = 'middle' | 'high' | 'university';
+
+export const READING_LEVELS: ReadingLevel[] = ['middle', 'high', 'university'];
+
+export const READING_LEVEL_LABELS: Record<ReadingLevel, string> = {
+  middle: 'Middle school',
+  high: 'High school',
+  university: 'University',
+};
+
+const CHAT_LEVEL_INSTRUCTIONS: Record<ReadingLevel, string> = {
+  middle: `READING LEVEL — MIDDLE SCHOOL (ages 11-14):
+Write for a middle-school student. Use everyday vocabulary and short sentences. Define ANY technical term the moment you use it. Build explanations from concrete, everyday analogies (sports, games, food, school life). Prefer plain-words descriptions over formal math notation; when you must show a formula, walk through it in words first.`,
+  high: `READING LEVEL — HIGH SCHOOL:
+Write for a high-school student. Use standard terminology with a brief definition on first use. Algebra-level math notation is fine. Balance intuition-building analogies with correct technical framing.`,
+  university: `READING LEVEL — UNIVERSITY:
+Write for a university student. Use precise technical terminology without over-explaining basics. Formal notation, rigorous definitions, and deeper mechanisms (edge cases, trade-offs, limitations) are welcome. Analogies should sharpen precision, not replace it.`,
+};
+
+const QUIZ_LEVEL_INSTRUCTIONS: Record<ReadingLevel, string> = {
+  middle: `Reading level: MIDDLE SCHOOL — use everyday vocabulary in the question and answers; test conceptual understanding without technical jargon.`,
+  high: `Reading level: HIGH SCHOOL — standard terminology is fine; keep reasoning steps accessible to a high-school student.`,
+  university: `Reading level: UNIVERSITY — precise technical terminology and rigorous distinctions are expected.`,
+};
+
+export function getChatSystemPrompt(level: ReadingLevel = 'high'): string {
+  return `${CHAT_SYSTEM_PROMPT}\n\n${CHAT_LEVEL_INSTRUCTIONS[level]}`;
+}
+
 export const CHAT_SYSTEM_PROMPT = `You are Recall Deck's AI Tutor. You explain concepts clearly, thoroughly, and visually. When asked about a topic, provide a well-structured explanation that covers the key points, targeting ~1200 characters per card of explanation.
 
 Keep your responses conversational but informative. Use examples and analogies when they help clarify concepts. Aim for explanations that are thorough enough to quiz on — cover the WHY, not just the WHAT.
@@ -26,8 +55,13 @@ MERMAID DIAGRAMS:
 - ALWAYS wrap node labels in double quotes if they contain special characters: A["Label (with parens)"] not A(Label (with parens))
 - Keep node labels SHORT (2-5 words).`;
 
-export function getQuizGenerationSystemPrompt(difficulty: 'warmup' | 'solid' | 'spicy'): string {
+export function getQuizGenerationSystemPrompt(
+  difficulty: 'warmup' | 'solid' | 'spicy',
+  level: ReadingLevel = 'high',
+): string {
   return `You are the question engine for a pop-quiz tool that tests what a learner just discussed with an AI tutor. You receive the transcript of an explanation. Produce ONE multiple-choice question.
+
+${QUIZ_LEVEL_INSTRUCTIONS[level]}
 
 Reason through these steps internally before producing output:
 

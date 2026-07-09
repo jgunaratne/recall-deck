@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { Conversation } from '@/lib/history';
+import { READING_LEVELS, READING_LEVEL_LABELS, type ReadingLevel } from '@/lib/prompts';
 
 const PROVIDER_LABELS: Record<string, string> = {
   gemini: 'Gemini',
@@ -9,6 +10,75 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 const ALL_PROVIDERS = ['gemini', 'anthropic'];
+
+const SLIDER_THUMB_CLASSES =
+  '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent ' +
+  '[&::-webkit-slider-thumb]:mt-[-5px] [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full ' +
+  '[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[var(--color-accent)] ' +
+  '[&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:transition-shadow hover:[&::-webkit-slider-thumb]:shadow-[0_0_0_4px_rgba(217,119,87,0.15)] ' +
+  '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-transparent ' +
+  '[&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full ' +
+  '[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[var(--color-accent)] ' +
+  '[&::-moz-range-thumb]:shadow-sm [&::-moz-range-thumb]:transition-shadow hover:[&::-moz-range-thumb]:shadow-[0_0_0_4px_rgba(217,119,87,0.15)]';
+
+function ReadingLevelSlider({
+  value,
+  onChange,
+}: {
+  value: ReadingLevel;
+  onChange: (level: ReadingLevel) => void;
+}) {
+  const index = Math.max(0, READING_LEVELS.indexOf(value));
+  const percent = (index / (READING_LEVELS.length - 1)) * 100;
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between px-1">
+        <span className="text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
+          Reading level
+        </span>
+        <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
+          {READING_LEVEL_LABELS[value]}
+        </span>
+      </div>
+      <div className="relative px-1 py-2">
+        {/* Track */}
+        <div className="pointer-events-none absolute left-1 right-1 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-border-subtle">
+          <div
+            className="absolute left-0 top-0 h-full rounded-full bg-accent/60 transition-all duration-75"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+        {/* Notches */}
+        <div className="pointer-events-none absolute left-[6px] right-[6px] top-1/2 flex -translate-y-1/2 justify-between">
+          {READING_LEVELS.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1 w-1 rounded-full transition-colors ${
+                index >= i ? 'bg-accent/40' : 'bg-border-subtle'
+              }`}
+            />
+          ))}
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={READING_LEVELS.length - 1}
+          step={1}
+          value={index}
+          onChange={(e) => onChange(READING_LEVELS[parseInt(e.target.value, 10)])}
+          aria-label="Reading level"
+          aria-valuetext={READING_LEVEL_LABELS[value]}
+          className={`relative z-10 block w-full cursor-pointer appearance-none bg-transparent ${SLIDER_THUMB_CLASSES}`}
+        />
+      </div>
+      <div className="flex justify-between px-1 text-[10px] uppercase tracking-wider text-text-tertiary">
+        <span>Middle</span>
+        <span>University</span>
+      </div>
+    </div>
+  );
+}
 
 function PanelLeftIcon() {
   return (
@@ -155,12 +225,14 @@ type SidebarProps = {
   mobileOpen: boolean;
   providers: string[];
   provider: string;
+  readingLevel: ReadingLevel;
   onToggleCollapse: () => void;
   onCloseMobile: () => void;
   onNewChat: () => void;
   onSelect: (conversation: Conversation) => void;
   onDelete: (id: string) => void;
   onProviderChange: (provider: string) => void;
+  onReadingLevelChange: (level: ReadingLevel) => void;
 };
 
 export default function Sidebar({
@@ -170,12 +242,14 @@ export default function Sidebar({
   mobileOpen,
   providers,
   provider,
+  readingLevel,
   onToggleCollapse,
   onCloseMobile,
   onNewChat,
   onSelect,
   onDelete,
   onProviderChange,
+  onReadingLevelChange,
 }: SidebarProps) {
   return (
     <>
@@ -268,12 +342,15 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Settings: engine picker */}
-        {providers.length > 0 && (
-          <div className="border-t-[0.5px] border-border-subtle p-3 group-data-[collapsed]/sidebar:md:hidden">
-            <div className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
-              Engine
-            </div>
+        {/* Settings: reading level + engine */}
+        <div className="flex flex-col gap-4 border-t-[0.5px] border-border-subtle p-3 group-data-[collapsed]/sidebar:md:hidden">
+          <ReadingLevelSlider value={readingLevel} onChange={onReadingLevelChange} />
+
+          {providers.length > 0 && (
+            <div>
+              <div className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
+                Engine
+              </div>
             <div className="flex rounded-md bg-state-hover p-0.5" role="radiogroup" aria-label="Model engine">
               {ALL_PROVIDERS.map((p) => {
                 const available = providers.includes(p);
@@ -295,9 +372,10 @@ export default function Sidebar({
                   </button>
                 );
               })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </nav>
     </>
   );
