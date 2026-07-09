@@ -139,10 +139,12 @@ export class GeminiLiveSession {
           },
         },
         realtimeInputConfig: {
+          turnCoverage: 'TURN_INCLUDES_ONLY_ACTIVITY',
           automaticActivityDetection: {
-            startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
-            endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
-            silenceDurationMs: 300,
+            startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH',
+            endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
+            silenceDurationMs: 1000,
+            prefixPaddingMs: 100,
           },
         },
       };
@@ -245,9 +247,18 @@ export class GeminiLiveSession {
   sendText(text: string): void {
     if (!this.session) return;
     try {
-      this.session.sendRealtimeInput({ text });
+      // Primary: sendClientContent with turnComplete triggers a response
+      this.session.sendClientContent({
+        turns: [{ role: 'user', parts: [{ text }] }],
+        turnComplete: true,
+      });
     } catch {
-      // session may be closing
+      // Fallback: sendRealtimeInput for older sessions
+      try {
+        this.session.sendRealtimeInput({ text });
+      } catch {
+        // session may be closing
+      }
     }
   }
 
