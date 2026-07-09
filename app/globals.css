@@ -1,26 +1,138 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============================================================
+   Design tokens — mapped to Tailwind v4 @theme from edu-cld
+   ============================================================ */
+@theme {
+  /* Fonts — Plus Jakarta Sans for UI, Fraunces for Serifs */
+  --font-sans: var(--font-sans), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, Menlo, monospace;
+
+  /* Colors */
+  --color-page: #faf9f5;
+  --color-surface: #ffffff;
+  --color-user-bubble: rgb(240 238 230);
+
+  --color-text-primary: rgb(20 20 19);
+  --color-text-secondary: rgb(61 61 58);
+  --color-text-tertiary: rgb(115 114 108);
+
+  --color-accent: rgb(217 119 87);
+  --color-accent-strong: rgb(198 97 63);
+  --color-danger: rgb(153 27 27);
+
+  --color-border-subtle: rgb(31 30 29 / 0.15);
+  --color-border-soft: rgb(31 30 29 / 0.08);
+
+  --color-state-hover: rgb(115 114 108 / 0.08);
+  --color-state-hover-soft: rgb(115 114 108 / 0.06);
+  --color-state-active: rgb(115 114 108 / 0.12);
+  --color-state-pill: rgb(115 114 108 / 0.1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Custom animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
+@keyframes pulse-subtle {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 87, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(217, 119, 87, 0);
+  }
+}
+
+/* Tailwind utility classes */
+@utility animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@utility animate-slide-up {
+  animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@utility animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  .animate-pulse-subtle {
+    animation: none;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-state-hover);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-state-active);
+}
+
+/* Safe area insets for mobile */
+html {
+  background-color: var(--color-page);
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-page);
+  color: var(--color-text-primary);
+  height: 100%;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Touch optimization */
+button, a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* D3 chart styling */
+.d3-chart text {
+  fill: var(--color-text-secondary);
+  font-family: var(--font-sans);
+}
+.d3-chart .domain {
+  stroke: transparent;
+}
+.d3-chart .tick line {
+  stroke: #edece7;
+}
+.d3-chart .tick text {
+  fill: var(--color-text-tertiary);
 }
