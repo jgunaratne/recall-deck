@@ -437,6 +437,12 @@ export default function Chat() {
   const handleQuizGoDeeper = () => {
     const topic = quizSource?.question ?? 'the previous topic';
     setQuizSource(null);
+    // Clear quiz signals — the deep-dive lecture mounts a fresh voice tutor
+    // whose dedup refs are empty, so stale values would replay the old
+    // quiz question and answer reactions into the new session.
+    setQuizContext(null);
+    setAnswerResult(null);
+    setQuizResult(null);
     setError(null);
     setActiveId(null);
     setMessages([]);

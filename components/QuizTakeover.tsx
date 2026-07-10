@@ -333,6 +333,7 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
         }
       }
       if (phase === 'reveal' && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault(); // keep space from scrolling the page
         handleNext();
       }
     };

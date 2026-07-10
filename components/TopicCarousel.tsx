@@ -148,7 +148,7 @@ export default function TopicCarousel({
       {/* Scrollable row */}
       <div
         ref={scrollRef}
-        className="flex gap-2 overflow-x-auto scroll-smooth pb-1"
+        className="topic-carousel flex gap-2 overflow-x-auto scroll-smooth pb-1"
         style={{
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',

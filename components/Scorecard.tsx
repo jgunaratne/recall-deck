@@ -37,7 +37,7 @@ export default function Scorecard({ score, total, streak, mastery, previousLevel
   } else if (isZero) {
     headline = 'Conceptual gaps';
     subline = 'Reviewing the material and trying again is recommended.';
-  } else if (score >= 2) {
+  } else if (score / total >= 0.6) {
     headline = 'Solid performance';
     subline = 'You got most of them. Ready for more advanced questions next time?';
   } else {
