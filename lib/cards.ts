@@ -84,5 +84,24 @@ export function splitIntoCards(content: string): string[] {
   }
 
   flushCard();
+
+  // A trailing title-only card (a heading with no body) is a truncation
+  // artifact — the model was cut off right after starting a section. Drop
+  // it rather than showing a card with a title and no content.
+  if (cards.length > 1) {
+    const lastLines = cards[cards.length - 1]
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (
+      lastLines.length === 1 &&
+      (SECTION_HEADING_RE.test(lastLines[0]) ||
+        BOLD_TITLE_RE.test(lastLines[0]) ||
+        CARD_HEADER_RE.test(lastLines[0]))
+    ) {
+      cards.pop();
+    }
+  }
+
   return cards.filter((c) => c.length > 0);
 }

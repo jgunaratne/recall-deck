@@ -93,7 +93,9 @@ async function createStream(
     const client = getAnthropicClient();
     const stream = await client.messages.stream({
       model: MODELS.CHAT,
-      max_tokens: 2048,
+      // Lectures include D3/Mermaid code blocks, which are token-hungry —
+      // 2048 caused mid-sentence truncation. Streaming, so no timeout risk.
+      max_tokens: 8192,
       system: systemPrompt,
       messages: messages.map((m) => ({
         role: m.role as 'user' | 'assistant',

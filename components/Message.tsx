@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import MermaidBlock from './MermaidBlock';
 import D3Block from './D3Block';
+import RenderingSpinner from './RenderingSpinner';
 import GeminiLiveOverlay from './GeminiLiveOverlay';
 import { splitIntoCards } from '@/lib/cards';
 import type { ReadingLevel } from '@/lib/prompts';
@@ -166,8 +167,8 @@ function MarkdownTable({ rows }: { rows: string[] }) {
 
 type BlockSegment =
   | { type: 'text'; content: string }
-  | { type: 'mermaid'; code: string }
-  | { type: 'd3'; code: string }
+  | { type: 'mermaid'; code: string; complete: boolean }
+  | { type: 'd3'; code: string; complete: boolean }
   | { type: 'code'; language: string; code: string };
 
 function parseBlockSegments(blockText: string): BlockSegment[] {
@@ -187,11 +188,13 @@ function parseBlockSegments(blockText: string): BlockSegment[] {
     }
   };
 
-  const flushCode = () => {
+  // `complete` is false when the block was cut off at end-of-content (its
+  // closing fence never arrived) — executing such code throws syntax errors.
+  const flushCode = (complete = true) => {
     if (codeBlockType === 'mermaid') {
-      segments.push({ type: 'mermaid', code: accumulatedCode.join('\n') });
+      segments.push({ type: 'mermaid', code: accumulatedCode.join('\n'), complete });
     } else if (codeBlockType === 'd3') {
-      segments.push({ type: 'd3', code: accumulatedCode.join('\n') });
+      segments.push({ type: 'd3', code: accumulatedCode.join('\n'), complete });
     } else if (codeBlockType === 'code') {
       segments.push({ type: 'code', language: codeBlockLang, code: accumulatedCode.join('\n') });
     }
@@ -231,7 +234,7 @@ function parseBlockSegments(blockText: string): BlockSegment[] {
   }
 
   if (inCodeBlock) {
-    flushCode();
+    flushCode(false);
   } else {
     flushText();
   }
@@ -253,10 +256,18 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
         const isLastSegment = idx === segments.length - 1;
         const segmentCursor = showCursor && isLastSegment;
 
+        // While the block is still streaming in (no closing fence yet),
+        // show a spinner instead of executing half-written code.
         if (seg.type === 'mermaid') {
+          if (!seg.complete && showCursor) {
+            return <RenderingSpinner key={idx} label="Rendering diagram" />;
+          }
           return <MermaidBlock key={idx} code={seg.code} />;
         }
         if (seg.type === 'd3') {
+          if (!seg.complete && showCursor) {
+            return <RenderingSpinner key={idx} label="Rendering visualization" />;
+          }
           return <D3Block key={idx} code={seg.code} />;
         }
         if (seg.type === 'code') {
