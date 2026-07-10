@@ -20,6 +20,10 @@ interface MessageProps {
   readingLevel?: ReadingLevel;
   /** Quiz context to inject into Gemini Live */
   quizContext?: string | null;
+  /** Answer result to inject into Gemini Live when student answers a quiz question */
+  answerResult?: string | null;
+  /** Whether the quiz is currently active/open */
+  isQuizActive?: boolean;
 }
 
 // Convert standard LaTeX equations/formulas into clean readable Unicode
@@ -392,6 +396,8 @@ export default function Message({
   topic,
   readingLevel = 'high',
   quizContext,
+  answerResult,
+  isQuizActive,
 }: MessageProps) {
   const isUser = role === 'user';
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -469,7 +475,9 @@ export default function Message({
                   isStreaming={!!isStreaming}
                   currentCardContent={currentBlock}
                   quizContext={quizContext ?? null}
+                  answerResult={answerResult ?? null}
                   allCards={blocks}
+                  isQuizActive={isQuizActive}
                 />
               )}
               {blocks.length > 1 && <span>{safeIndex + 1} of {blocks.length}</span>}

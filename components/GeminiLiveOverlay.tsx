@@ -18,8 +18,12 @@ interface GeminiLiveOverlayProps {
   currentCardContent: string | null;
   /** Quiz question text, if any, to inject as context */
   quizContext: string | null;
+  /** Answer result text when the student answers a quiz question */
+  answerResult: string | null;
   /** All card contents for full context */
   allCards: string[];
+  /** Whether the quiz is currently active/open */
+  isQuizActive?: boolean;
 }
 
 // ── Icons ────────────────────────────────────────────────────────────────────
@@ -82,7 +86,9 @@ export default function GeminiLiveOverlay({
   isStreaming,
   currentCardContent,
   quizContext,
+  answerResult,
   allCards,
+  isQuizActive,
 }: GeminiLiveOverlayProps) {
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [isMuted, setIsMuted] = useState(false);
@@ -95,6 +101,8 @@ export default function GeminiLiveOverlay({
   const sessionRef = useRef<import('@/lib/gemini-live-session').GeminiLiveSession | null>(null);
   const recorderRef = useRef<import('@/lib/audio-recorder').AudioRecorder | null>(null);
   const playerRef = useRef<import('@/lib/audio-player').AudioPlayer | null>(null);
+  // Mirror muted state in a ref so player callbacks avoid stale closures
+  const mutedRef = useRef(false);
   // Cards streamed to the model as grounding context vs. cards the tutor has
   // been asked to read aloud — separate sets, because every card becomes
   // context as it streams in, but reading happens only when the student
@@ -102,6 +110,7 @@ export default function GeminiLiveOverlay({
   const sentCardsRef = useRef<Set<string>>(new Set());
   const readCardsRef = useRef<Set<string>>(new Set());
   const sentQuizRef = useRef<string | null>(null);
+  const sentAnswerRef = useRef<string | null>(null);
   const hasKickedOffRef = useRef(false);
   // Synchronous connect guard — the `status` state is stale within a render
   // pass, so rapid effect re-runs (e.g. while cards stream in) would
@@ -157,7 +166,8 @@ export default function GeminiLiveOverlay({
       // Create audio player
       const player = new AudioPlayer();
       player.onPlaybackStart = () => {
-        if (mountedRef.current) setIsSpeaking(true);
+        // Don't flip isSpeaking when muted — the icon should stay muted
+        if (mountedRef.current && !mutedRef.current) setIsSpeaking(true);
       };
       player.onPlaybackEnd = () => {
         if (mountedRef.current) setIsSpeaking(false);
@@ -231,6 +241,7 @@ export default function GeminiLiveOverlay({
     sentCardsRef.current.clear();
     readCardsRef.current.clear();
     sentQuizRef.current = null;
+    sentAnswerRef.current = null;
     hasKickedOffRef.current = false;
     if (mountedRef.current) {
       setStatus('idle');
@@ -239,8 +250,16 @@ export default function GeminiLiveOverlay({
     }
   }, []);
 
-  // (Removed auto-connect — the session starts only when the user clicks the
-  // audio icon, matching the "click to turn on" UX.)
+  // Auto-connect when the overlay mounts so the tutor starts speaking
+  // as soon as cards appear — no manual click required.
+  useEffect(() => {
+    if (status === 'idle') {
+      connect();
+    }
+    // Only run on mount — `connect` identity changes with `status`, but we
+    // only want the initial trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Seed card content as context before the conversation starts ───────────
   // Gemini 3.1 Live only accepts `clientContent` context while seeding the
@@ -292,10 +311,35 @@ export default function GeminiLiveOverlay({
     if (sentQuizRef.current === quizContext) return;
 
     sentQuizRef.current = quizContext;
+    // Reset answer tracking for this new question
+    sentAnswerRef.current = null;
     session.sendText(
       `[QUIZ QUESTION]\n${quizContext}\n\nA quiz question has appeared! Read it out loud engagingly and let the student think about the answer. Do not reveal the correct answer.`
     );
   }, [quizContext, status]);
+
+  // ── React to the student's answer ─────────────────────────────────────────
+
+  useEffect(() => {
+    const session = sessionRef.current;
+    if (!session || status !== 'connected' || !answerResult) return;
+    if (sentAnswerRef.current === answerResult) return;
+
+    sentAnswerRef.current = answerResult;
+    // Flush any in-progress speech so the tutor reacts immediately
+    playerRef.current?.flush();
+    session.sendText(
+      `${answerResult}\n\nReact to how the student answered. Be concise — one or two sentences. Be encouraging if correct, gently corrective if wrong. Then stop and wait for the next question.`
+    );
+  }, [answerResult, status]);
+
+  // ── Pause/flush audio if quiz becomes active ───────────────────────────────
+  useEffect(() => {
+    if (isQuizActive && playerRef.current) {
+      playerRef.current.flush();
+      setIsSpeaking(false);
+    }
+  }, [isQuizActive]);
 
   // ── Mute / Unmute speaker ──────────────────────────────────────────────────
 
@@ -303,8 +347,9 @@ export default function GeminiLiveOverlay({
     setIsMuted((prev) => {
       const next = !prev;
       if (next) {
-        // Muting — stop current playback
-        playerRef.current?.stop();
+        // Muting — flush pending audio but keep the context alive so
+        // the muted flag is respected when the next card triggers audio.
+        playerRef.current?.flush();
         setIsSpeaking(false);
       }
       return next;
@@ -317,6 +362,7 @@ export default function GeminiLiveOverlay({
     if (playerRef.current) {
       playerRef.current.muted = isMuted;
     }
+    mutedRef.current = isMuted;
   }, [isMuted]);
 
   // ── Mic toggle ─────────────────────────────────────────────────────────────
@@ -427,10 +473,10 @@ export default function GeminiLiveOverlay({
           type="button"
           id="gemini-live-mic-toggle"
           onClick={toggleMic}
-          aria-label={isMicOpen ? 'Close microphone' : 'Open microphone'}
-          title={isMicOpen ? 'Close microphone' : 'Open microphone'}
-          className={`relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-full
-            transition-all duration-200
+          aria-label={isMicOpen ? 'Stop listening' : 'Ask a question'}
+          title={isMicOpen ? 'Stop listening' : 'Ask a question'}
+          className={`relative flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1
+            text-[11px] font-medium transition-all duration-200
             ${isMicOpen
               ? 'bg-red-500/15 text-red-500 hover:bg-red-500/25'
               : 'bg-state-hover text-text-tertiary hover:bg-state-hover-soft hover:text-text-secondary'
@@ -442,6 +488,7 @@ export default function GeminiLiveOverlay({
           <span className="relative z-10">
             {isMicOpen ? <MicOnIcon /> : <MicOffIcon />}
           </span>
+          <span className="relative z-10">{isMicOpen ? 'Listening…' : 'Ask Question'}</span>
         </button>
       )}
 

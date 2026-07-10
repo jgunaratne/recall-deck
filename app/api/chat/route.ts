@@ -1,7 +1,7 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
 import { getGeminiClient, GEMINI_MODELS } from '@/lib/gemini';
 import { getChatSystemPrompt, READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
-import { resolveProvider } from '@/lib/provider';
+import { resolveProvider, getFallbackProvider, shouldFallback, type AIProvider } from '@/lib/provider';
 
 export const runtime = 'nodejs';
 
@@ -41,6 +41,86 @@ function describeChatError(error: unknown): { status: number; message: string } 
   };
 }
 
+/**
+ * Create a readable SSE stream for the given provider.
+ * Throws on connection-level errors (e.g. rate limit) so the caller can
+ * catch and fall back to another provider.
+ */
+async function createStream(
+  provider: AIProvider,
+  messages: Array<{ role: string; content: string }>,
+  systemPrompt: string,
+): Promise<ReadableStream> {
+  const encoder = new TextEncoder();
+
+  if (provider === 'gemini') {
+    const ai = getGeminiClient();
+    const contents = messages.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    const response = await ai.models.generateContentStream({
+      model: GEMINI_MODELS.CHAT,
+      contents,
+      config: { systemInstruction: systemPrompt },
+    });
+
+    return new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of response) {
+            const text = chunk.text;
+            if (text) {
+              const data = JSON.stringify({ type: 'text', text });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            }
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (error) {
+          console.error('Chat stream error:', error instanceof Error ? error.message : error);
+          const data = JSON.stringify({ type: 'error', error: describeChatError(error).message });
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          controller.close();
+        }
+      },
+    });
+  } else {
+    // Anthropic
+    const client = getAnthropicClient();
+    const stream = await client.messages.stream({
+      model: MODELS.CHAT,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: messages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+    });
+
+    return new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const event of stream) {
+            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+              const data = JSON.stringify({ type: 'text', text: event.delta.text });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            }
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (error) {
+          console.error('Chat stream error:', error instanceof Error ? error.message : error);
+          const data = JSON.stringify({ type: 'error', error: describeChatError(error).message });
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          controller.close();
+        }
+      },
+    });
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -74,80 +154,20 @@ export async function POST(req: Request) {
       }
     }
 
-    const encoder = new TextEncoder();
-
     let readable: ReadableStream;
-
-    if (provider === 'gemini') {
-      const ai = getGeminiClient();
-
-      // Convert messages to Gemini contents format (Gemini uses 'model' instead of 'assistant')
-      const contents = messages.map((m: { role: string; content: string }) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      }));
-
-      const response = await ai.models.generateContentStream({
-        model: GEMINI_MODELS.CHAT,
-        contents,
-        config: {
-          systemInstruction: systemPrompt,
-        },
-      });
-
-      readable = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const chunk of response) {
-              const text = chunk.text;
-              if (text) {
-                const data = JSON.stringify({ type: 'text', text });
-                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-              }
-            }
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-          } catch (error) {
-            console.error('Chat stream error:', error instanceof Error ? error.message : error);
-            const data = JSON.stringify({ type: 'error', error: describeChatError(error).message });
-            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-            controller.close();
-          }
-        },
-      });
-    } else {
-      // Anthropic (default)
-      const client = getAnthropicClient();
-
-      const stream = await client.messages.stream({
-        model: MODELS.CHAT,
-        max_tokens: 2048,
-        system: systemPrompt,
-        messages: messages.map((m: { role: string; content: string }) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })),
-      });
-
-      readable = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const event of stream) {
-              if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-                const data = JSON.stringify({ type: 'text', text: event.delta.text });
-                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-              }
-            }
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-          } catch (error) {
-            console.error('Chat stream error:', error instanceof Error ? error.message : error);
-            const data = JSON.stringify({ type: 'error', error: describeChatError(error).message });
-            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-            controller.close();
-          }
-        },
-      });
+    try {
+      readable = await createStream(provider, messages, systemPrompt);
+    } catch (error) {
+      // If the primary provider fails with a retryable error, try the fallback
+      const fallback = getFallbackProvider(provider);
+      if (fallback && shouldFallback(error)) {
+        console.warn(
+          `Primary provider "${provider}" failed (${error instanceof Error ? error.message : error}), falling back to "${fallback}"`,
+        );
+        readable = await createStream(fallback, messages, systemPrompt);
+      } else {
+        throw error;
+      }
     }
 
     return new Response(readable, {

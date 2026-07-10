@@ -39,3 +39,29 @@ export function getAvailableProviders(): AIProvider[] {
   if (process.env.GEMINI_API_KEY) providers.push('gemini');
   return providers;
 }
+
+/**
+ * Return the other provider if it's available, or null if no fallback exists.
+ */
+export function getFallbackProvider(primary: AIProvider): AIProvider | null {
+  const other: AIProvider = primary === 'anthropic' ? 'gemini' : 'anthropic';
+  return isProviderAvailable(other) ? other : null;
+}
+
+/**
+ * Check if an error is retryable with a fallback provider
+ * (rate limit, overloaded, or token/quota exhaustion).
+ */
+export function shouldFallback(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error);
+  let code = (error as { status?: number } | null)?.status;
+  if (typeof code !== 'number') {
+    const match = raw.match(/"code"\s*:\s*(\d{3})/);
+    if (match) code = parseInt(match[1], 10);
+  }
+  // Rate limit, overloaded, or insufficient quota / tokens
+  if (code === 429 || code === 503 || code === 529) return true;
+  // Anthropic-specific: credit balance / token errors
+  if (/credit|balance|quota|token.*limit|rate.*limit|overloaded|capacity/i.test(raw)) return true;
+  return false;
+}

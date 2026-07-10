@@ -106,11 +106,57 @@ const TOPIC_POOLS: Record<ReadingLevel, Topic[]> = {
 
 /**
  * Pick `count` random topics from the pool for the given reading level.
- * Uses Fisher-Yates on a copy to avoid showing duplicates.
+ * Optionally exclude prompts already shown to avoid duplicates when appending.
  */
-export function pickTopics(level: ReadingLevel, count = 6): Topic[] {
-  const pool = [...TOPIC_POOLS[level]];
+export function pickTopics(level: ReadingLevel, count = 6, exclude?: Set<string>): Topic[] {
+  let pool = [...TOPIC_POOLS[level]];
+  if (exclude?.size) {
+    pool = pool.filter((t) => !exclude.has(t.prompt));
+  }
   // Fisher-Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count);
+}
+
+// ---------------------------------------------------------------------------
+// Professional / Career topics — not tied to a reading level
+// ---------------------------------------------------------------------------
+
+const PROFESSIONAL_TOPICS: Topic[] = [
+  { label: 'Salary negotiation', prompt: 'What are the best strategies for negotiating a higher salary at a new job or during a raise?' },
+  { label: 'Resume that stands out', prompt: 'How do I write a resume that gets past applicant tracking systems and impresses hiring managers?' },
+  { label: 'Career pivoting', prompt: 'How do professionals successfully pivot to a completely different career field?' },
+  { label: 'Leadership skills', prompt: 'What are the key leadership skills that separate great managers from average ones?' },
+  { label: 'Networking effectively', prompt: 'How do I build a professional network without feeling fake or transactional?' },
+  { label: 'Interview mastery', prompt: 'What are the most effective techniques for answering behavioral interview questions?' },
+  { label: 'Remote work success', prompt: 'How do I stay productive, visible, and promotable while working remotely?' },
+  { label: 'Personal branding', prompt: 'How do I build a personal brand that attracts career opportunities?' },
+  { label: 'Managing up', prompt: 'What does it mean to "manage up" and how do I do it effectively with my boss?' },
+  { label: 'Work-life balance', prompt: 'What are evidence-based strategies for preventing burnout while advancing your career?' },
+  { label: 'Public speaking', prompt: 'How do I become a confident public speaker and deliver compelling presentations?' },
+  { label: 'Getting promoted', prompt: 'What are the unwritten rules for getting promoted at most companies?' },
+  { label: 'Freelancing 101', prompt: 'How do I transition from full-time employment to successful freelancing?' },
+  { label: 'Conflict resolution', prompt: 'How do I handle workplace conflicts and difficult conversations professionally?' },
+  { label: 'Executive presence', prompt: 'What is executive presence and how do I develop it early in my career?' },
+  { label: 'Side hustle strategy', prompt: 'How do I start a side hustle that could eventually replace my full-time income?' },
+  { label: 'Skill stacking', prompt: 'What is skill stacking and how do I combine skills to become uniquely valuable?' },
+  { label: 'First 90 days', prompt: 'What should I focus on during my first 90 days at a new job to make the best impression?' },
+  { label: 'Mentorship', prompt: 'How do I find and cultivate mentors who can accelerate my career growth?' },
+  { label: 'AI-proof career', prompt: 'Which career skills are most resistant to AI automation and how do I develop them?' },
+];
+
+/**
+ * Pick `count` random professional topics.
+ * Optionally exclude prompts already shown to avoid duplicates when appending.
+ */
+export function pickProfessionalTopics(count = 6, exclude?: Set<string>): Topic[] {
+  let pool = [...PROFESSIONAL_TOPICS];
+  if (exclude?.size) {
+    pool = pool.filter((t) => !exclude.has(t.prompt));
+  }
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];

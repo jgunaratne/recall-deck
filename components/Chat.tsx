@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useSyncExternalStore } from 'react';
 import Message from './Message';
 import QuizTakeover from './QuizTakeover';
+import TopicCarousel from './TopicCarousel';
 import Sidebar from './Sidebar';
 import { splitIntoCards } from '@/lib/cards';
 import { computeMastery, type MasteryLevel, type TopicMastery } from '@/lib/mastery';
-import { pickTopics, type Topic } from '@/lib/topics';
+import { pickTopics, pickProfessionalTopics, type Topic } from '@/lib/topics';
 import { READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
 import {
   type ChatMessage,
@@ -57,25 +58,6 @@ function MenuIcon() {
   );
 }
 
-function RefreshIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-      <path d="M21 3v5h-5" />
-      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-      <path d="M8 16H3v5" />
-    </svg>
-  );
-}
 
 function SparkMark({ className }: { className?: string }) {
   return (
@@ -107,6 +89,8 @@ export default function Chat() {
   const [masteryNote, setMasteryNote] = useState<MasteryNote | null>(null);
   // Latest quiz question, streamed to the voice tutor's context window.
   const [quizContext, setQuizContext] = useState<string | null>(null);
+  // Latest answer result, streamed to the voice tutor so it can react.
+  const [answerResult, setAnswerResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Snapshot of the last failed exchange so the error banner can offer Retry.
   const [retrySnapshot, setRetrySnapshot] = useState<{
@@ -114,6 +98,7 @@ export default function Chat() {
     convId: string;
   } | null>(null);
   const [visibleTopics, setVisibleTopics] = useState<Topic[]>([]);
+  const [visibleProTopics, setVisibleProTopics] = useState<Topic[]>([]);
 
   // Conversation history (localStorage-backed external store)
   const conversations = useSyncExternalStore(
@@ -122,6 +107,23 @@ export default function Chat() {
     getHistoryServerSnapshot,
   );
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Build a map of prompts the user has explored → their completion status.
+  // 'complete' = quiz taken, 'partial' = explored but no quiz yet.
+  const topicStatus = useMemo(() => {
+    const status = new Map<string, 'partial' | 'complete'>();
+    for (const conv of conversations) {
+      const firstUser = conv.messages.find((m) => m.role === 'user');
+      if (!firstUser) continue;
+      const hasQuiz = conv.quizzes.length > 0;
+      const existing = status.get(firstUser.content);
+      // 'complete' wins over 'partial' if the same prompt appears in multiple conversations
+      if (!existing || (hasQuiz && existing === 'partial')) {
+        status.set(firstUser.content, hasQuiz ? 'complete' : 'partial');
+      }
+    }
+    return status;
+  }, [conversations]);
 
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -142,7 +144,7 @@ export default function Chat() {
           if (saved && data.providers.includes(saved)) {
             setProvider(saved);
           } else {
-            const defaultProv = data.providers.includes('gemini') ? 'gemini' : data.providers[0];
+            const defaultProv = data.providers.includes('anthropic') ? 'anthropic' : data.providers[0];
             setProvider(defaultProv);
           }
         }
@@ -161,6 +163,7 @@ export default function Chat() {
       } else {
         setVisibleTopics(pickTopics('high'));
       }
+      setVisibleProTopics(pickProfessionalTopics());
     }, 0);
     return () => clearTimeout(timer);
   }, []);
@@ -359,6 +362,7 @@ export default function Chat() {
     });
     setMasteryNote(null);
     setQuizContext(null);
+    setAnswerResult(null);
     setShowQuizButton(false);
   };
 
@@ -398,12 +402,15 @@ export default function Chat() {
     setActiveId(null);
     setShowQuizButton(false);
     setQuizContext(null);
+    setAnswerResult(null);
     setError(null);
   };
 
   const handleQuizDismiss = () => {
     setQuizSource(null);
     setQuizContext(null);
+    setAnswerResult(null);
+    setShowQuizButton(true);
     setError(null);
   };
 
@@ -418,12 +425,13 @@ export default function Chat() {
   };
 
   const handleNewChat = () => {
-    if (isStreaming) return;
     setQuizSource(null);
     setQuizContext(null);
+    setAnswerResult(null);
     setMessages([]);
     setActiveId(null);
     setShowQuizButton(false);
+    setIsStreaming(false);
     setError(null);
     setSidebarOpen(false);
   };
@@ -557,9 +565,27 @@ export default function Chat() {
               <SparkMark className="h-4 w-4 text-accent" />
               <span className="font-serif text-lg text-text-primary">Recall Deck</span>
             </div>
-            <span className="hidden text-xs text-text-tertiary sm:block">
-              Active recall, one pop quiz at a time
-            </span>
+            <div className="flex items-center gap-2">
+              {isEmpty ? (
+                <span className="hidden text-xs text-text-tertiary sm:block">
+                  Active recall, one pop quiz at a time
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleNewChat}
+                  aria-label="Return to home"
+                  title="Return to home"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md
+                    text-text-tertiary transition-colors hover:bg-state-hover hover:text-text-primary"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </header>
 
           {isEmpty ? (
@@ -574,36 +600,41 @@ export default function Chat() {
               </div>
 
               <div className="w-full max-w-[var(--input-max-width)]">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {visibleTopics.map((seed, idx) => (
-                    <button
-                      key={`${seed.label}-${idx}`}
-                      id={`seed-prompt-${idx}`}
-                      type="button"
-                      onClick={() => sendMessage(seed.prompt)}
-                      className="group flex cursor-pointer flex-col gap-1 rounded-lg border border-border-soft
-                        bg-surface p-3 text-left transition-colors
-                        hover:border-border-subtle hover:bg-state-hover"
-                    >
-                      <span className="text-sm font-medium text-text-primary">{seed.label}</span>
-                      <span className="line-clamp-2 text-xs leading-snug text-text-tertiary">
-                        {seed.prompt}
-                      </span>
-                    </button>
-                  ))}
+                <TopicCarousel
+                  topics={visibleTopics}
+                  topicStatus={topicStatus}
+                  idPrefix="seed-prompt"
+                  onSelect={sendMessage}
+                  onLoadMore={() => {
+                    const existing = new Set(visibleTopics.map((t) => t.prompt));
+                    const more = pickTopics(readingLevel, 6, existing);
+                    if (more.length > 0) {
+                      setVisibleTopics((prev) => [...prev, ...more]);
+                    }
+                  }}
+                />
+
+                {/* Divider */}
+                <div className="my-6 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border-soft" />
+                  <span className="text-xs font-medium text-text-tertiary">Jobs &amp; Careers</span>
+                  <div className="h-px flex-1 bg-border-soft" />
                 </div>
-                <div className="mt-3 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={() => setVisibleTopics(pickTopics(readingLevel))}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-full border border-border-soft
-                      bg-surface px-4 py-1.5 text-xs font-medium text-text-secondary
-                      transition-colors hover:border-border-subtle hover:bg-state-hover"
-                  >
-                    <RefreshIcon />
-                    More topics
-                  </button>
-                </div>
+
+                {/* Professional topics */}
+                <TopicCarousel
+                  topics={visibleProTopics}
+                  topicStatus={topicStatus}
+                  idPrefix="pro-prompt"
+                  onSelect={sendMessage}
+                  onLoadMore={() => {
+                    const existing = new Set(visibleProTopics.map((t) => t.prompt));
+                    const more = pickProfessionalTopics(6, existing);
+                    if (more.length > 0) {
+                      setVisibleProTopics((prev) => [...prev, ...more]);
+                    }
+                  }}
+                />
               </div>
 
               <div className="w-full max-w-[var(--input-max-width)]">
@@ -632,6 +663,8 @@ export default function Chat() {
                         topic={firstUserMsg?.content}
                         readingLevel={readingLevel}
                         quizContext={quizContext}
+                        answerResult={answerResult}
+                        isQuizActive={!!quizSource}
                       />
                     );
                   })}
@@ -665,6 +698,7 @@ export default function Chat() {
           onClose={handleQuizDismiss}
           onComplete={handleQuizComplete}
           onQuestionShown={setQuizContext}
+          onAnswerGiven={setAnswerResult}
           onOpenSidebar={() => setSidebarOpen(true)}
         />
       )}

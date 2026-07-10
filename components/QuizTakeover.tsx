@@ -43,14 +43,16 @@ interface QuizTakeoverProps {
   onComplete?: (score: number, total: number) => void;
   /** Fires when a question is shown — feeds the voice tutor's context. */
   onQuestionShown?: (context: string) => void;
+  /** Fires when the student answers — feeds the result to the voice tutor. */
+  onAnswerGiven?: (context: string) => void;
   onOpenSidebar?: () => void;
 }
 
 const QUESTIONS_PER_ROUND = 5;
-const TIMER_DURATION_MS = 20000;
+const TIMER_DURATION_MS = 45000;
 const DIFFICULTIES: Array<'warmup' | 'solid' | 'spicy'> = ['warmup', 'warmup', 'solid', 'solid', 'spicy'];
 
-export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', mastery, previousMasteryLevel, onReturnToHome, onGoDeeper, onClose, onComplete, onQuestionShown, onOpenSidebar }: QuizTakeoverProps) {
+export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', mastery, previousMasteryLevel, onReturnToHome, onGoDeeper, onClose, onComplete, onQuestionShown, onAnswerGiven, onOpenSidebar }: QuizTakeoverProps) {
   const [phase, setPhase] = useState<QuizPhase>('intro');
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -222,6 +224,20 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
         setStreak(0);
       }
 
+      // Notify the voice tutor about the student's answer so it can react
+      if (onAnswerGiven) {
+        const answerContext = [
+          `[STUDENT ANSWERED — Question ${questionIndex + 1}]`,
+          `Question: ${currentQuestion.question}`,
+          `Student chose: ${chosen.text}`,
+          wasCorrect
+            ? `That is CORRECT! 🎉`
+            : `That is INCORRECT. The correct answer was: ${correct.text}`,
+          `Response time: ${responseTime.toFixed(1)}s`,
+        ].join('\n');
+        onAnswerGiven(answerContext);
+      }
+
       setMontyBanter('');
       setPhase('reveal');
 
@@ -250,7 +266,7 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
         console.error('Failed to get feedback reaction:', err);
       }
     },
-    [currentQuestion, chosenIndex, questionIndex, fetchQuestion, streamMontyReaction, streak]
+    [currentQuestion, chosenIndex, questionIndex, fetchQuestion, streamMontyReaction, streak, onAnswerGiven]
   );
 
   // Advance to next question or scorecard

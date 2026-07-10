@@ -61,7 +61,8 @@ export class AudioPlayer {
     if (!this._audioContext) {
       this._audioContext = new AudioContext({ sampleRate: PLAYBACK_SAMPLE_RATE });
       this._gainNode = this._audioContext.createGain();
-      this._gainNode.gain.value = MAKEUP_GAIN;
+      // Respect current mute state when creating a fresh gain node
+      this._gainNode.gain.value = this._muted ? 0 : MAKEUP_GAIN;
       this._gainNode.connect(this._audioContext.destination);
     }
     // Autoplay policy can leave the context suspended when it was created

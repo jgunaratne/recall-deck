@@ -16,7 +16,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Claude',
 };
 
-const ALL_PROVIDERS = ['gemini', 'anthropic'];
+const ALL_PROVIDERS = ['anthropic', 'gemini'];
 
 const SLIDER_THUMB_CLASSES =
   '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent ' +
