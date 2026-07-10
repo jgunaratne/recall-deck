@@ -13,7 +13,9 @@ npm run dev
 
 ## Environment Variables
 
-- `ANTHROPIC_API_KEY` — Required. Your Anthropic API key.
+- `ANTHROPIC_API_KEY` — Required. Your Anthropic API key (chat, quiz generation, and quiz reactions).
+- `GEMINI_API_KEY` — Optional. Enables the Gemini chat provider and the Gemini Live voice tutor.
+- `DEFAULT_AI_PROVIDER` — Optional. `anthropic` (default) or `gemini`.
 - `DEMO_PASSCODE` — Optional. Set to gate access with a passcode.
 
 ## Deployed URL

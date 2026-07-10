@@ -16,7 +16,7 @@ export function getAnthropicClient(): Anthropic {
 
 // Model constants
 export const MODELS = {
-  CHAT: 'claude-sonnet-4-6-20250514' as const,
-  QUIZ_GENERATE: 'claude-sonnet-4-6-20250514' as const,
-  QUIZ_REACT: 'claude-haiku-4-5-20250414' as const,
+  CHAT: 'claude-sonnet-4-6' as const,
+  QUIZ_GENERATE: 'claude-sonnet-4-6' as const,
+  QUIZ_REACT: 'claude-haiku-4-5' as const,
 } as const;
