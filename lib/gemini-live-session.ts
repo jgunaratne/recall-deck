@@ -4,9 +4,6 @@
  *
  * The API key is passed in at connect-time by the caller (fetched from a
  * server endpoint via BFF pattern — never hardcoded or stored client-side).
- *
- * This replaces the old raw-WebSocket approach with the SDK's built-in
- * connection management, matching the hansel/orchestrator reference.
  */
 
 import { GoogleGenAI, Modality } from '@google/genai';
