@@ -109,6 +109,10 @@ export default function GeminiLiveOverlay({
   const playerRef = useRef<import('@/lib/audio-player').AudioPlayer | null>(null);
   // Mirror muted state in a ref so player callbacks avoid stale closures
   const mutedRef = useRef(false);
+  // Pause tutor audio from the moment the quiz opens until its first
+  // question is injected — the model is usually mid-turn on a card
+  // explanation, and its remaining chunks would talk over the quiz intro.
+  const suppressAudioRef = useRef(false);
   // Cards streamed to the model as grounding context vs. cards the tutor has
   // been asked to read aloud — separate sets, because every card becomes
   // context as it streams in, but reading happens only when the student
@@ -194,8 +198,11 @@ export default function GeminiLiveOverlay({
           }
         },
         onAudioChunk: (base64Pcm) => {
-          // Always enqueue audio — the player's own `muted` property
-          // handles silencing so we avoid a stale-closure on isMuted.
+          // Drop chunks while quiz-intro suppression is active — the card
+          // explanation should not resume over the quiz intro screen.
+          if (suppressAudioRef.current) return;
+          // Always enqueue audio otherwise — the player's own `muted`
+          // property handles silencing so we avoid a stale-closure on isMuted.
           playerRef.current?.playChunk(base64Pcm);
         },
         onTurnComplete: () => {
@@ -322,6 +329,10 @@ export default function GeminiLiveOverlay({
     sentQuizRef.current = quizContext;
     // Reset answer tracking for this new question
     sentAnswerRef.current = null;
+    // The quiz has actually started — lift the intro suppression and drop
+    // any stale buffered speech so the tutor comes back reading the question.
+    suppressAudioRef.current = false;
+    playerRef.current?.flush();
     session.sendText(
       `[QUIZ QUESTION]\n${quizContext}\n\nA quiz question has appeared! Read it out loud engagingly and let the student think about the answer. Do not reveal the correct answer.`
     );
@@ -357,11 +368,15 @@ export default function GeminiLiveOverlay({
     );
   }, [quizResult, status]);
 
-  // ── Pause/flush audio if quiz becomes active ───────────────────────────────
+  // ── Pause audio when the quiz opens; resume handled by the first question ──
   useEffect(() => {
-    if (isQuizActive && playerRef.current) {
-      playerRef.current.flush();
+    if (isQuizActive) {
+      suppressAudioRef.current = true;
+      playerRef.current?.flush();
       setIsSpeaking(false);
+    } else {
+      // Quiz closed/dismissed — let card audio flow again.
+      suppressAudioRef.current = false;
     }
   }, [isQuizActive]);
 

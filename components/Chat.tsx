@@ -136,10 +136,20 @@ export default function Chat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messageCountRef = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const autoStartQuizRef = useRef(false);
   // Aborts the in-flight lecture stream when the user navigates away —
   // otherwise its chunk updates re-populate messages after they're cleared.
   const streamAbortRef = useRef<AbortController | null>(null);
+
+  // Restore the saved model choice on load — independent of the providers
+  // fetch below, so a slow or failed fetch can't discard it. Deferred a tick
+  // so hydration renders the same stable default the server did.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const saved = localStorage.getItem('recalldeck_provider');
+      if (saved) setProvider(saved);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     fetch('/api/providers')
@@ -147,13 +157,16 @@ export default function Chat() {
       .then((data) => {
         if (data.providers && data.providers.length > 0) {
           setAvailableProviders(data.providers);
-          const saved = localStorage.getItem('recalldeck_provider');
-          if (saved && data.providers.includes(saved)) {
-            setProvider(saved);
-          } else {
-            const defaultProv = data.providers.includes('anthropic') ? 'anthropic' : data.providers[0];
-            setProvider(defaultProv);
-          }
+          // Keep the current (possibly restored) choice if it's actually
+          // available; otherwise fall back. Functional update so we never
+          // clobber a choice made while the fetch was in flight.
+          setProvider((current) =>
+            data.providers.includes(current)
+              ? current
+              : data.providers.includes('anthropic')
+                ? 'anthropic'
+                : data.providers[0],
+          );
         }
       })
       .catch((err) => console.error('Failed to load providers:', err));
@@ -226,8 +239,6 @@ export default function Chat() {
     const assistantMessage: ChatMessage = { role: 'assistant', content: '' };
     setMessages([...newMessages, assistantMessage]);
 
-    const userMessage = newMessages[newMessages.length - 1];
-
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -298,13 +309,7 @@ export default function Chat() {
       if (fullResponse.length > 100) {
         setShowQuizButton(true);
       }
-
-      if (autoStartQuizRef.current && fullResponse) {
-        autoStartQuizRef.current = false;
-        startQuizForMessage(userMessage.content, fullResponse);
-      }
     } catch (err) {
-      autoStartQuizRef.current = false;
       // User navigated away mid-stream — not an error, and the cleared
       // message state must stay cleared.
       if (controller.signal.aborted) return;
@@ -453,7 +458,6 @@ export default function Chat() {
     setError(null);
     setActiveId(null);
     setMessages([]);
-    autoStartQuizRef.current = true;
     // fresh: the deep dive is a new conversation — the voice tutor must be
     // rebuilt around the new lecture's topic and cards, not the old set.
     sendMessage(
@@ -643,6 +647,13 @@ export default function Chat() {
               </div>
 
               <div className="w-full max-w-[var(--input-max-width)]">
+                {/* Section label — mirrors the Jobs & Careers divider below */}
+                <div className="mb-6 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border-soft" />
+                  <span className="text-xs font-medium text-text-tertiary">Education</span>
+                  <div className="h-px flex-1 bg-border-soft" />
+                </div>
+
                 <TopicCarousel
                   topics={visibleTopics}
                   topicStatus={topicStatus}
