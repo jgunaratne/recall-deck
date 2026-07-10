@@ -11,7 +11,7 @@ export const QuizQuestionSchema = z.object({
   misconception: z.string(),
   question: z.string(),
   host_intro: z.string(),
-  difficulty: z.enum(['warmup', 'solid', 'spicy']),
+  difficulty: z.enum(['warmup', 'solid', 'tricky']),
   answers: z.array(AnswerSchema),
 });
 
@@ -39,7 +39,7 @@ export const QUIZ_QUESTION_JSON_SCHEMA = {
     misconception: { type: 'string' as const, description: 'The specific plausible misconception this question targets' },
     question: { type: 'string' as const, description: 'Max 25 words. Tests understanding, not verbatim recall of phrasing.' },
     host_intro: { type: 'string' as const, description: 'One-line Monty setup for this question, max 15 words' },
-    difficulty: { type: 'string' as const, enum: ['warmup', 'solid', 'spicy'] },
+    difficulty: { type: 'string' as const, enum: ['warmup', 'solid', 'tricky'] },
     answers: {
       type: 'array' as const,
       description: 'Exactly 4 items. Exactly one has is_correct=true.',

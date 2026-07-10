@@ -34,7 +34,7 @@ const GEMINI_QUIZ_QUESTION_SCHEMA = {
     },
     difficulty: {
       type: Type.STRING,
-      enum: ['warmup', 'solid', 'spicy'],
+      enum: ['warmup', 'solid', 'tricky'],
     },
     answers: {
       type: Type.ARRAY,
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     }
 
     // Validate difficulty
-    const validDifficulties = ['warmup', 'solid', 'spicy'] as const;
+    const validDifficulties = ['warmup', 'solid', 'tricky'] as const;
     if (!validDifficulties.includes(difficulty)) {
       return new Response(JSON.stringify({ error: 'Invalid difficulty' }), {
         status: 400,
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
             },
           ],
           config: {
-            systemInstruction: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'spicy', readingLevel),
+            systemInstruction: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'tricky', readingLevel),
             responseMimeType: 'application/json',
             responseSchema: GEMINI_QUIZ_QUESTION_SCHEMA,
           },
@@ -125,7 +125,7 @@ export async function POST(req: Request) {
       const response = await client.messages.create({
         model: MODELS.QUIZ_GENERATE,
         max_tokens: 1024,
-        system: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'spicy', readingLevel),
+        system: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'tricky', readingLevel),
         messages: [
           {
             role: 'user',

@@ -1,4 +1,4 @@
-# HECKLE
+# Recall Tutor
 
 A pop-quiz game show that ambushes you about the thing Claude just taught you.
 

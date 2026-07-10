@@ -169,7 +169,7 @@ export function buildLiveSystemInstruction(topic: string, level: ReadingLevel): 
   const config = VOICE_CONFIGS[level];
   const character = generateCharacter(topic, level);
 
-  return `You are ${character.name}, ${character.identity}. You are a live voice tutor for the Recall Deck study app, currently helping a student learn about: ${topic}.
+  return `You are ${character.name}, ${character.identity}. You are a live voice tutor for the Recall Tutor study app, currently helping a student learn about: ${topic}.
 
 Stay in character as ${character.name} throughout — your personality flavors the session, but teaching always comes first.
 

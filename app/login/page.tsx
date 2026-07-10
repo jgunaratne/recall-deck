@@ -42,7 +42,7 @@ export default function LoginPage() {
             className="font-serif text-3xl font-light text-text-primary"
             style={{ fontVariationSettings: '"opsz" 48' }}
           >
-            Recall Deck
+            Recall Tutor
           </h1>
           <p className="mt-2 text-sm text-text-tertiary">
             Enter the demo passcode to continue

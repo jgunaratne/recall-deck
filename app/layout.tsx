@@ -19,7 +19,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Recall Deck — Pop Quizzes for Active Recall",
+  title: "Recall Tutor — Pop Quizzes for Active Recall",
   description:
     "Chat with an AI tutor, then take quick pop quizzes from The Professor to consolidate your learning.",
 };

@@ -596,7 +596,7 @@ export default function Chat() {
                 <MenuIcon />
               </button>
               <SparkMark className="h-4 w-4 text-accent" />
-              <span className="font-serif text-lg text-text-primary">Recall Deck</span>
+              <span className="font-serif text-lg text-text-primary">Recall Tutor</span>
             </div>
             <div className="flex items-center gap-2">
               {isEmpty ? (

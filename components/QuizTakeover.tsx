@@ -52,7 +52,7 @@ interface QuizTakeoverProps {
 
 const QUESTIONS_PER_ROUND = 5;
 const TIMER_DURATION_MS = 45000;
-const DIFFICULTIES: Array<'warmup' | 'solid' | 'spicy'> = ['warmup', 'warmup', 'solid', 'solid', 'spicy'];
+const DIFFICULTIES: Array<'warmup' | 'solid' | 'tricky'> = ['warmup', 'warmup', 'solid', 'solid', 'tricky'];
 
 export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', mastery, previousMasteryLevel, onReturnToHome, onGoDeeper, onClose, onComplete, onQuestionShown, onAnswerGiven, onQuizFinished, onOpenSidebar }: QuizTakeoverProps) {
   const [phase, setPhase] = useState<QuizPhase>('intro');
@@ -469,7 +469,7 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
                   ? 'Warm-up'
                   : currentQuestion.difficulty === 'solid'
                   ? 'Solid'
-                  : 'Spicy'}
+                  : 'Tricky'}
               </span>
             </div>
 

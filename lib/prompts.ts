@@ -50,7 +50,7 @@ export function getChatSystemPrompt(level: ReadingLevel = 'high'): string {
   return `${CHAT_SYSTEM_PROMPT}\n\n${CHAT_LEVEL_INSTRUCTIONS[level]}`;
 }
 
-export const CHAT_SYSTEM_PROMPT = `You are Recall Deck's AI Tutor. You explain concepts clearly, thoroughly, and visually. When asked about a topic, provide a well-structured explanation that covers the key points, using the card length target specified in the reading level instructions below.
+export const CHAT_SYSTEM_PROMPT = `You are Recall Tutor's AI Tutor. You explain concepts clearly, thoroughly, and visually. When asked about a topic, provide a well-structured explanation that covers the key points, using the card length target specified in the reading level instructions below.
 
 Keep your responses conversational but informative. Use examples and analogies when they help clarify concepts. Aim for explanations that are thorough enough to quiz on — cover the WHY, not just the WHAT.
 
@@ -84,7 +84,7 @@ MERMAID DIAGRAMS:
 - Keep node labels SHORT (2-5 words).`;
 
 export function getQuizGenerationSystemPrompt(
-  difficulty: 'warmup' | 'solid' | 'spicy',
+  difficulty: 'warmup' | 'solid' | 'tricky',
   level: ReadingLevel = 'high',
 ): string {
   return `You are the question engine for a pop-quiz tool that tests what a learner just discussed with an AI tutor. You receive the transcript of an explanation. Produce ONE multiple-choice question.
@@ -94,7 +94,7 @@ ${QUIZ_LEVEL_INSTRUCTIONS[level]}
 Difficulty within this education level: ${difficulty}
 - warmup = straightforward recall of something directly stated
 - solid = requires understanding the concept (not just remembering a sentence)
-- spicy = requires comparing or contrasting ideas from the explanation
+- tricky = requires comparing or contrasting ideas from the explanation
 
 CRITICAL: Match the education level above. An elementary quiz should feel easy and fun. A middle-school quiz should feel fair. Only university-level quizzes should include subtle traps.
 
