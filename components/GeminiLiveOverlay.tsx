@@ -20,6 +20,8 @@ interface GeminiLiveOverlayProps {
   quizContext: string | null;
   /** Answer result text when the student answers a quiz question */
   answerResult: string | null;
+  /** Final score text when the quiz ends, for a closing remark */
+  quizResult: string | null;
   /** All card contents for full context */
   allCards: string[];
   /** Whether the quiz is currently active/open */
@@ -87,6 +89,7 @@ export default function GeminiLiveOverlay({
   currentCardContent,
   quizContext,
   answerResult,
+  quizResult,
   allCards,
   isQuizActive,
 }: GeminiLiveOverlayProps) {
@@ -111,6 +114,7 @@ export default function GeminiLiveOverlay({
   const readCardsRef = useRef<Set<string>>(new Set());
   const sentQuizRef = useRef<string | null>(null);
   const sentAnswerRef = useRef<string | null>(null);
+  const sentQuizResultRef = useRef<string | null>(null);
   const hasKickedOffRef = useRef(false);
   // Synchronous connect guard — the `status` state is stale within a render
   // pass, so rapid effect re-runs (e.g. while cards stream in) would
@@ -211,6 +215,8 @@ export default function GeminiLiveOverlay({
       sentCardsRef.current.clear();
       readCardsRef.current.clear();
       sentQuizRef.current = null;
+      sentAnswerRef.current = null;
+      sentQuizResultRef.current = null;
       setCharacterName(config.characterName ?? null);
 
       await session.connect({
@@ -242,6 +248,7 @@ export default function GeminiLiveOverlay({
     readCardsRef.current.clear();
     sentQuizRef.current = null;
     sentAnswerRef.current = null;
+    sentQuizResultRef.current = null;
     hasKickedOffRef.current = false;
     if (mountedRef.current) {
       setStatus('idle');
@@ -332,6 +339,21 @@ export default function GeminiLiveOverlay({
       `${answerResult}\n\nReact to how the student answered. Be concise — one or two sentences. Be encouraging if correct, gently corrective if wrong. Then stop and wait for the next question.`
     );
   }, [answerResult, status]);
+
+  // ── Remark on the end of the quiz ──────────────────────────────────────────
+
+  useEffect(() => {
+    const session = sessionRef.current;
+    if (!session || status !== 'connected' || !quizResult) return;
+    if (sentQuizResultRef.current === quizResult) return;
+
+    sentQuizResultRef.current = quizResult;
+    // Flush any lingering answer reaction so the wrap-up starts cleanly
+    playerRef.current?.flush();
+    session.sendText(
+      `${quizResult}\n\nThe quiz has ended and the student is looking at their scorecard. Give a short closing remark on their overall performance — celebrate a strong score, or be warm and encouraging about trying again if they struggled. Two sentences at most, then stop.`
+    );
+  }, [quizResult, status]);
 
   // ── Pause/flush audio if quiz becomes active ───────────────────────────────
   useEffect(() => {

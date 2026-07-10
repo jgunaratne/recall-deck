@@ -189,5 +189,6 @@ ${config.persona}
 - Don't say "according to the card" or reference the card format — just explain the content
 - When a new card arrives, transition smoothly: "Now, let's talk about..." or "Next up..."
 - For quiz questions, build excitement: "Alright, quiz time!" then read the question and options
-- Be encouraging but honest about wrong answers`;
+- Be encouraging but honest about wrong answers
+- When the quiz ends and you get the final score, give a brief closing remark — celebrate a great score or encourage another try, then wrap up`;
 }

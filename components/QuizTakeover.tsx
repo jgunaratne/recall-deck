@@ -45,6 +45,8 @@ interface QuizTakeoverProps {
   onQuestionShown?: (context: string) => void;
   /** Fires when the student answers — feeds the result to the voice tutor. */
   onAnswerGiven?: (context: string) => void;
+  /** Fires when the quiz ends — lets the voice tutor remark on the final score. */
+  onQuizFinished?: (context: string) => void;
   onOpenSidebar?: () => void;
 }
 
@@ -52,7 +54,7 @@ const QUESTIONS_PER_ROUND = 5;
 const TIMER_DURATION_MS = 45000;
 const DIFFICULTIES: Array<'warmup' | 'solid' | 'spicy'> = ['warmup', 'warmup', 'solid', 'solid', 'spicy'];
 
-export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', mastery, previousMasteryLevel, onReturnToHome, onGoDeeper, onClose, onComplete, onQuestionShown, onAnswerGiven, onOpenSidebar }: QuizTakeoverProps) {
+export default function QuizTakeover({ question, cards, provider, readingLevel = 'high', mastery, previousMasteryLevel, onReturnToHome, onGoDeeper, onClose, onComplete, onQuestionShown, onAnswerGiven, onQuizFinished, onOpenSidebar }: QuizTakeoverProps) {
   const [phase, setPhase] = useState<QuizPhase>('intro');
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -275,6 +277,15 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
 
     if (nextIndex >= QUESTIONS_PER_ROUND) {
       onComplete?.(score, QUESTIONS_PER_ROUND);
+      onQuizFinished?.(
+        [
+          '[QUIZ COMPLETE]',
+          `The quiz is over. Final score: ${score} out of ${QUESTIONS_PER_ROUND}.`,
+          streak > 1 ? `The student finished on a ${streak}-question streak.` : '',
+        ]
+          .filter(Boolean)
+          .join('\n')
+      );
       setPhase('scorecard');
       return;
     }
@@ -302,7 +313,7 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
         setIsLoading(false);
       }
     }
-  }, [questionIndex, fetchQuestion, onComplete, score]);
+  }, [questionIndex, fetchQuestion, onComplete, onQuizFinished, score, streak]);
 
   // Handle timer expiry (treat as incorrect)
   const handleTimerExpire = useCallback(() => {

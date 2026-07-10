@@ -22,6 +22,8 @@ interface MessageProps {
   quizContext?: string | null;
   /** Answer result to inject into Gemini Live when student answers a quiz question */
   answerResult?: string | null;
+  /** Final quiz result to inject into Gemini Live when the quiz ends */
+  quizResult?: string | null;
   /** Whether the quiz is currently active/open */
   isQuizActive?: boolean;
 }
@@ -397,6 +399,7 @@ export default function Message({
   readingLevel = 'high',
   quizContext,
   answerResult,
+  quizResult,
   isQuizActive,
 }: MessageProps) {
   const isUser = role === 'user';
@@ -476,6 +479,7 @@ export default function Message({
                   currentCardContent={currentBlock}
                   quizContext={quizContext ?? null}
                   answerResult={answerResult ?? null}
+                  quizResult={quizResult ?? null}
                   allCards={blocks}
                   isQuizActive={isQuizActive}
                 />

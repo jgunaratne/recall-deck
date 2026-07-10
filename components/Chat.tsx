@@ -91,6 +91,8 @@ export default function Chat() {
   const [quizContext, setQuizContext] = useState<string | null>(null);
   // Latest answer result, streamed to the voice tutor so it can react.
   const [answerResult, setAnswerResult] = useState<string | null>(null);
+  // Final quiz score, streamed to the voice tutor so it can remark on the finish.
+  const [quizResult, setQuizResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Snapshot of the last failed exchange so the error banner can offer Retry.
   const [retrySnapshot, setRetrySnapshot] = useState<{
@@ -133,6 +135,9 @@ export default function Chat() {
   const messageCountRef = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const autoStartQuizRef = useRef(false);
+  // Aborts the in-flight lecture stream when the user navigates away —
+  // otherwise its chunk updates re-populate messages after they're cleared.
+  const streamAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetch('/api/providers')
@@ -212,6 +217,9 @@ export default function Chat() {
     setError(null);
     setRetrySnapshot(null);
 
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+
     // Add empty assistant message for streaming
     const assistantMessage: ChatMessage = { role: 'assistant', content: '' };
     setMessages([...newMessages, assistantMessage]);
@@ -222,6 +230,7 @@ export default function Chat() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
           provider,
@@ -257,10 +266,12 @@ export default function Chat() {
               const parsed = JSON.parse(data);
               if (parsed.type === 'text') {
                 fullResponse += parsed.text;
-                setMessages([
-                  ...newMessages,
-                  { role: 'assistant', content: fullResponse },
-                ]);
+                if (!controller.signal.aborted) {
+                  setMessages([
+                    ...newMessages,
+                    { role: 'assistant', content: fullResponse },
+                  ]);
+                }
               } else if (parsed.type === 'error') {
                 throw new Error(parsed.error);
               }
@@ -292,10 +303,16 @@ export default function Chat() {
       }
     } catch (err) {
       autoStartQuizRef.current = false;
+      // User navigated away mid-stream — not an error, and the cleared
+      // message state must stay cleared.
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : 'Failed to get response');
       setRetrySnapshot({ messages: newMessages, convId });
       setMessages(newMessages);
     } finally {
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null;
+      }
       setIsStreaming(false);
     }
   };
@@ -363,6 +380,7 @@ export default function Chat() {
     setMasteryNote(null);
     setQuizContext(null);
     setAnswerResult(null);
+    setQuizResult(null);
     setShowQuizButton(false);
   };
 
@@ -403,6 +421,7 @@ export default function Chat() {
     setShowQuizButton(false);
     setQuizContext(null);
     setAnswerResult(null);
+    setQuizResult(null);
     setError(null);
   };
 
@@ -410,6 +429,7 @@ export default function Chat() {
     setQuizSource(null);
     setQuizContext(null);
     setAnswerResult(null);
+    setQuizResult(null);
     setShowQuizButton(true);
     setError(null);
   };
@@ -425,9 +445,14 @@ export default function Chat() {
   };
 
   const handleNewChat = () => {
+    // Cancel any in-flight lecture stream so its chunk updates can't
+    // re-populate the messages we're about to clear.
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
     setQuizSource(null);
     setQuizContext(null);
     setAnswerResult(null);
+    setQuizResult(null);
     setMessages([]);
     setActiveId(null);
     setShowQuizButton(false);
@@ -664,6 +689,7 @@ export default function Chat() {
                         readingLevel={readingLevel}
                         quizContext={quizContext}
                         answerResult={answerResult}
+                        quizResult={quizResult}
                         isQuizActive={!!quizSource}
                       />
                     );
@@ -699,6 +725,7 @@ export default function Chat() {
           onComplete={handleQuizComplete}
           onQuestionShown={setQuizContext}
           onAnswerGiven={setAnswerResult}
+          onQuizFinished={setQuizResult}
           onOpenSidebar={() => setSidebarOpen(true)}
         />
       )}
