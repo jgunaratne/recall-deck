@@ -1,5 +1,5 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
-import { getGeminiClient, GEMINI_MODELS } from '@/lib/gemini';
+import { getGeminiClient, GEMINI_MODELS, withGeminiFallback } from '@/lib/gemini';
 import { getChatSystemPrompt, READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
 import { resolveProvider, getFallbackProvider, shouldFallback, type AIProvider } from '@/lib/provider';
 
@@ -60,11 +60,13 @@ async function createStream(
       parts: [{ text: m.content }],
     }));
 
-    const response = await ai.models.generateContentStream({
-      model: GEMINI_MODELS.CHAT,
-      contents,
-      config: { systemInstruction: systemPrompt },
-    });
+    const response = await withGeminiFallback(GEMINI_MODELS.CHAT, (model) =>
+      ai.models.generateContentStream({
+        model,
+        contents,
+        config: { systemInstruction: systemPrompt },
+      }),
+    );
 
     return new ReadableStream({
       async start(controller) {
@@ -155,6 +157,9 @@ export async function POST(req: Request) {
     }
 
     let readable: ReadableStream;
+    // The provider that actually serves the response — differs from the
+    // requested one only when the retryable-error fallback kicks in.
+    let servedBy = provider;
     try {
       readable = await createStream(provider, messages, systemPrompt);
     } catch (error) {
@@ -165,6 +170,7 @@ export async function POST(req: Request) {
           `Primary provider "${provider}" failed (${error instanceof Error ? error.message : error}), falling back to "${fallback}"`,
         );
         readable = await createStream(fallback, messages, systemPrompt);
+        servedBy = fallback;
       } else {
         throw error;
       }
@@ -176,6 +182,7 @@ export async function POST(req: Request) {
         'Cache-Control': 'no-cache, no-store',
         Connection: 'keep-alive',
         'X-Content-Type-Options': 'nosniff',
+        'X-Provider': servedBy,
       },
     });
   } catch (error) {

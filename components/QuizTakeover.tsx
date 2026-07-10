@@ -375,6 +375,9 @@ export default function QuizTakeover({ question, cards, provider, readingLevel =
           <span className="px-2 font-serif text-lg text-text-primary">Pop Quiz</span>
         </div>
         <div className="flex items-center gap-3">
+          {/* Gemini Live controls teleport here while the quiz is open —
+              GeminiLiveOverlay portals its bar into this slot. */}
+          <div id="quiz-live-controls" className="flex items-center gap-1.5" />
           {phase !== 'scorecard' && (
             <span className="text-sm tabular-nums text-text-tertiary">
               Question {questionIndex + 1} of {QUESTIONS_PER_ROUND}

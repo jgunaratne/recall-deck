@@ -1,5 +1,5 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
-import { getGeminiClient, GEMINI_MODELS } from '@/lib/gemini';
+import { getGeminiClient, GEMINI_MODELS, withGeminiFallback } from '@/lib/gemini';
 import {
   getQuizGenerationSystemPrompt,
   getQuizGenerationUserPrompt,
@@ -95,20 +95,22 @@ export async function POST(req: Request) {
     if (provider === 'gemini') {
       const ai = getGeminiClient();
 
-      const response = await ai.models.generateContent({
-        model: GEMINI_MODELS.QUIZ_GENERATE,
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: getQuizGenerationUserPrompt(transcript, validatedPreviousQuestions) }],
+      const response = await withGeminiFallback(GEMINI_MODELS.QUIZ_GENERATE, (model) =>
+        ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: getQuizGenerationUserPrompt(transcript, validatedPreviousQuestions) }],
+            },
+          ],
+          config: {
+            systemInstruction: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'spicy', readingLevel),
+            responseMimeType: 'application/json',
+            responseSchema: GEMINI_QUIZ_QUESTION_SCHEMA,
           },
-        ],
-        config: {
-          systemInstruction: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'spicy', readingLevel),
-          responseMimeType: 'application/json',
-          responseSchema: GEMINI_QUIZ_QUESTION_SCHEMA,
-        },
-      });
+        }),
+      );
 
       const responseText = response.text;
       if (!responseText) {

@@ -1,5 +1,5 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
-import { getGeminiClient, GEMINI_MODELS } from '@/lib/gemini';
+import { getGeminiClient, GEMINI_MODELS, withGeminiFallback } from '@/lib/gemini';
 import { MONTY_SYSTEM_PROMPT, getMontyReactUserPrompt } from '@/lib/prompts';
 import { resolveProvider } from '@/lib/provider';
 
@@ -32,29 +32,31 @@ export async function POST(req: Request) {
     if (provider === 'gemini') {
       const ai = getGeminiClient();
 
-      const responseStream = await ai.models.generateContentStream({
-        model: GEMINI_MODELS.QUIZ_REACT,
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: getMontyReactUserPrompt({
-                  question,
-                  chosen: { text: chosen.text, why_tempting: chosen.why_tempting },
-                  correct: { text: correct.text, why_tempting: correct.why_tempting },
-                  was_correct,
-                  streak,
-                  response_time_s: typeof response_time_s === 'number' ? response_time_s : 0,
-                }),
-              },
-            ],
+      const responseStream = await withGeminiFallback(GEMINI_MODELS.QUIZ_REACT, (model) =>
+        ai.models.generateContentStream({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: getMontyReactUserPrompt({
+                    question,
+                    chosen: { text: chosen.text, why_tempting: chosen.why_tempting },
+                    correct: { text: correct.text, why_tempting: correct.why_tempting },
+                    was_correct,
+                    streak,
+                    response_time_s: typeof response_time_s === 'number' ? response_time_s : 0,
+                  }),
+                },
+              ],
+            },
+          ],
+          config: {
+            systemInstruction: MONTY_SYSTEM_PROMPT,
           },
-        ],
-        config: {
-          systemInstruction: MONTY_SYSTEM_PROMPT,
-        },
-      });
+        }),
+      );
 
       readable = new ReadableStream({
         async start(controller) {

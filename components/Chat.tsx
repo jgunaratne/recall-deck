@@ -81,7 +81,9 @@ export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [provider, setProvider] = useState('gemini');
+  // Claude is the default content provider — matches the server-side default
+  // and covers the window before /api/providers resolves (or if it fails).
+  const [provider, setProvider] = useState('anthropic');
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [readingLevel, setReadingLevel] = useState<ReadingLevel>('high');
   const [showQuizButton, setShowQuizButton] = useState(false);

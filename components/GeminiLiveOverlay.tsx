@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReadingLevel } from '@/lib/prompts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -97,8 +98,10 @@ export default function GeminiLiveOverlay({
   const [isMuted, setIsMuted] = useState(false);
   const [isMicOpen, setIsMicOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [characterName, setCharacterName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // While the quiz takeover is open, the control bar teleports into its
+  // header slot so the student can mute the tutor or ask a question mid-quiz.
+  const [quizPortalEl, setQuizPortalEl] = useState<HTMLElement | null>(null);
 
   // Refs for the session, recorder, and player (lazy-loaded)
   const sessionRef = useRef<import('@/lib/gemini-live-session').GeminiLiveSession | null>(null);
@@ -217,7 +220,6 @@ export default function GeminiLiveOverlay({
       sentQuizRef.current = null;
       sentAnswerRef.current = null;
       sentQuizResultRef.current = null;
-      setCharacterName(config.characterName ?? null);
 
       await session.connect({
         apiKey: config.apiKey,
@@ -363,6 +365,16 @@ export default function GeminiLiveOverlay({
     }
   }, [isQuizActive]);
 
+  // ── Locate the quiz header's control slot while the quiz is open ──────────
+  useEffect(() => {
+    if (!isQuizActive) {
+      setQuizPortalEl(null);
+      return;
+    }
+    // Both components commit in the same render pass; query after commit.
+    setQuizPortalEl(document.getElementById('quiz-live-controls'));
+  }, [isQuizActive]);
+
   // ── Mute / Unmute speaker ──────────────────────────────────────────────────
 
   const toggleMute = useCallback(() => {
@@ -444,7 +456,7 @@ export default function GeminiLiveOverlay({
   // The parent (Message.tsx) only mounts this component when `topic` and
   // `isLastMessage` are truthy, so we always render the audio icon here.
 
-  return (
+  const controlBar = (
     <div className="gemini-live-bar flex items-center gap-1.5">
       {/* Speaker mute/unmute */}
       <button
@@ -459,8 +471,8 @@ export default function GeminiLiveOverlay({
             : status === 'connecting'
               ? 'Connecting…'
               : isMuted
-                ? `Unmute ${characterName ?? 'tutor'}`
-                : `Mute ${characterName ?? 'tutor'}`
+                ? 'Unmute tutor'
+                : 'Mute tutor'
         }
         className={`relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full
           transition-all duration-200
@@ -514,13 +526,6 @@ export default function GeminiLiveOverlay({
         </button>
       )}
 
-      {/* Character name — who is speaking */}
-      {status === 'connected' && characterName && (
-        <span className="hidden max-w-[140px] truncate text-[11px] text-text-tertiary sm:inline">
-          {characterName}
-        </span>
-      )}
-
       {/* Error indicator */}
       {error && (
         <span
@@ -532,4 +537,8 @@ export default function GeminiLiveOverlay({
       )}
     </div>
   );
+
+  // While the quiz takeover covers the card, teleport the controls into its
+  // header so mute and ask-a-question stay reachable without a second session.
+  return quizPortalEl ? createPortal(controlBar, quizPortalEl) : controlBar;
 }

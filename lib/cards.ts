@@ -7,6 +7,17 @@
 // "### Card 3: Title", or plain "Card 4: Title" at the start of a line.
 const CARD_HEADER_RE = /^(?:\*{2}|#{1,6}\s+)?\s*Card\s+\d+\s*[:\u2013\u2014\-]/i;
 
+// Markdown section titles: "## Heading" or a standalone short bold line.
+// These are preferred split points \u2014 a card should never end with a title
+// whose body lands on the next card.
+const SECTION_HEADING_RE = /^#{1,6}\s+\S/;
+const BOLD_TITLE_RE = /^\*\*[^*]{1,80}\*\*:?\s*$/;
+
+// Flush before a section heading once the current card has this much
+// content. Must stay well below the blank-line threshold (500) so a
+// heading can never sit at the tail of a card that then hits that limit.
+const HEADING_SPLIT_MIN = 200;
+
 export function splitIntoCards(content: string): string[] {
   const lines = content.split('\n');
   const cards: string[] = [];
@@ -33,6 +44,15 @@ export function splitIntoCards(content: string): string[] {
 
     // Explicit "Card N:" header always starts a new card (outside code blocks)
     if (!inCodeBlock && CARD_HEADER_RE.test(trimmed)) {
+      flushCard();
+    } else if (
+      // Section titles start a new card too once the current one has real
+      // content — otherwise the length-based split below can strand a title
+      // at the bottom of a card with its body on the next one.
+      !inCodeBlock &&
+      currentLength > HEADING_SPLIT_MIN &&
+      (SECTION_HEADING_RE.test(trimmed) || BOLD_TITLE_RE.test(trimmed))
+    ) {
       flushCard();
     }
 

@@ -145,7 +145,8 @@ export default function TopicCarousel({
         </button>
       )}
 
-      {/* Scrollable row */}
+      {/* Scrollable row — fades out at the right edge while more content
+          is scrollable, instead of cutting cards off abruptly */}
       <div
         ref={scrollRef}
         className="topic-carousel flex gap-2 overflow-x-auto scroll-smooth pb-1"
@@ -154,6 +155,12 @@ export default function TopicCarousel({
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
           WebkitOverflowScrolling: 'touch',
+          maskImage: canScrollRight
+            ? 'linear-gradient(to right, black calc(100% - 64px), transparent)'
+            : undefined,
+          WebkitMaskImage: canScrollRight
+            ? 'linear-gradient(to right, black calc(100% - 64px), transparent)'
+            : undefined,
         }}
       >
         <style>{`
