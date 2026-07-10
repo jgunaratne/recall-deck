@@ -57,7 +57,7 @@ Keep your responses conversational but informative. Use examples and analogies w
 Do NOT explicitly label cards or sections with "Card X:" or "Card X: Title". Just use clean headings (e.g., "## Title") to structure your explanation.
 
 VISUALIZATIONS:
-You MUST proactively include visual explanations whenever possible to help explain a concept. Unless the topic is purely text-based and cannot be mapped to any visual model, include at least one visualization per explanation.
+You MUST proactively include visual explanations whenever possible to help explain a concept. Unless the topic is purely text-based and cannot be mapped to any visual model, include at least one visualization per explanation — and aim for a diagram or figure in EVERY major section whose content maps to a visual model (a process, comparison, structure, relationship, or quantity). Markdown tables are fine for side-by-side comparisons, but prefer a diagram when the relationship can be drawn.
 - PREFER D3.js data visualizations (using \`\`\`d3 fenced code blocks) when the topic has quantities, metrics, comparisons, data, coordinates, or mathematical functions.
 - Use Mermaid diagrams (\`\`\`mermaid) for workflows, architectures, processes, lifecycles, states, sequences, and conceptual hierarchies or mindmaps.
 - Integrate the visualization inline as part of the explanation flow.

@@ -319,16 +319,21 @@ export default function Chat() {
     }
   };
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, opts?: { fresh?: boolean }) => {
     if (!content.trim() || isStreaming) return;
 
+    // `fresh` starts a brand-new conversation. Callers that reset state with
+    // setMessages([]) / setActiveId(null) right before calling us must use
+    // this — those setters don't change the values this closure captured, so
+    // without it the exchange silently continues the old conversation (and
+    // the voice tutor inherits the old topic and cards).
     const userMessage: ChatMessage = { role: 'user', content: content.trim() };
-    const newMessages = [...messages, userMessage];
+    const newMessages = opts?.fresh ? [userMessage] : [...messages, userMessage];
     setMessages(newMessages);
     setInput('');
 
     // Create or update the conversation record for this turn.
-    let convId = activeId;
+    let convId = opts?.fresh ? null : activeId;
     if (!convId) {
       convId = newConversationId();
       setActiveId(convId);
@@ -449,7 +454,12 @@ export default function Chat() {
     setActiveId(null);
     setMessages([]);
     autoStartQuizRef.current = true;
-    sendMessage(`Go deeper on the topic: "${topic}". Please explain the advanced concepts, subtleties, and edge cases in more detail.`);
+    // fresh: the deep dive is a new conversation — the voice tutor must be
+    // rebuilt around the new lecture's topic and cards, not the old set.
+    sendMessage(
+      `Go deeper on the topic: "${topic}". Please explain the advanced concepts, subtleties, and edge cases in more detail.`,
+      { fresh: true },
+    );
   };
 
   const handleNewChat = () => {

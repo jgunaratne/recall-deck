@@ -120,6 +120,50 @@ function parseInline(text: string): React.ReactNode[] {
   });
 }
 
+// GFM-style table: header row, |---|---| separator, body rows.
+function MarkdownTable({ rows }: { rows: string[] }) {
+  const parseRow = (row: string) => row.slice(1, -1).split('|').map((c) => c.trim());
+  const isSeparator = (row: string) => {
+    const cells = parseRow(row);
+    return cells.length > 0 && cells.every((c) => /^:?-{3,}:?$/.test(c));
+  };
+  const hasHeader = rows.length > 1 && isSeparator(rows[1]);
+  const header = hasHeader ? parseRow(rows[0]) : null;
+  const bodyRows = rows
+    .slice(hasHeader ? 2 : 0)
+    .filter((r) => !isSeparator(r))
+    .map(parseRow);
+
+  return (
+    <div className="my-3 overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        {header && (
+          <thead>
+            <tr>
+              {header.map((cell, i) => (
+                <th key={i} className="border-b border-border-strong px-3 py-2 text-left font-semibold text-text-primary">
+                  {parseInline(cell)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+        )}
+        <tbody>
+          {bodyRows.map((row, i) => (
+            <tr key={i}>
+              {row.map((cell, j) => (
+                <td key={j} className="border-b border-border-soft px-3 py-2 align-top leading-relaxed text-text-secondary">
+                  {parseInline(cell)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 type BlockSegment =
   | { type: 'text'; content: string }
   | { type: 'mermaid'; code: string }
@@ -224,12 +268,48 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
         }
 
         const lines = seg.content.split('\n');
+
+        // Group consecutive table rows (| ... |) so they render as real
+        // tables instead of falling through to plain text. Blank lines
+        // between rows are tolerated — models sometimes emit them.
+        type LineItem = { kind: 'line'; line: string } | { kind: 'table'; rows: string[] };
+        const items: LineItem[] = [];
+        for (let i = 0; i < lines.length; i++) {
+          const t = lines[i].trim();
+          const prev = items[items.length - 1];
+          if (t.startsWith('|') && t.endsWith('|') && t.length > 2) {
+            if (prev?.kind === 'table') {
+              prev.rows.push(t);
+            } else {
+              items.push({ kind: 'table', rows: [t] });
+            }
+          } else if (
+            t === '' &&
+            prev?.kind === 'table' &&
+            lines
+              .slice(i + 1)
+              .find((l) => l.trim() !== '')
+              ?.trim()
+              .startsWith('|')
+          ) {
+            // blank line inside a table — swallow it so the run continues
+          } else {
+            items.push({ kind: 'line', line: lines[i] });
+          }
+        }
+
         return (
           <div key={idx} className="space-y-2">
-            {lines.map((line, lIdx) => {
-              const trimmed = line.trim();
-              const isLastLine = lIdx === lines.length - 1;
+            {items.map((item, lIdx) => {
+              const isLastLine = lIdx === items.length - 1;
               const lineCursor = segmentCursor && isLastLine;
+
+              if (item.kind === 'table') {
+                return <MarkdownTable key={lIdx} rows={item.rows} />;
+              }
+
+              const line = item.line;
+              const trimmed = line.trim();
 
               // Block Math: $$ equation $$
               if (trimmed.startsWith('$$') && trimmed.endsWith('$$')) {

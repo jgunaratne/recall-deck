@@ -18,6 +18,9 @@ const BOLD_TITLE_RE = /^\*\*[^*]{1,80}\*\*:?\s*$/;
 // heading can never sit at the tail of a card that then hits that limit.
 const HEADING_SPLIT_MIN = 200;
 
+// Markdown horizontal rules: ---, ***, ___ (3 or more).
+const DIVIDER_RE = /^(?:-{3,}|\*{3,}|_{3,})\s*$/;
+
 export function splitIntoCards(content: string): string[] {
   const lines = content.split('\n');
   const cards: string[] = [];
@@ -27,11 +30,24 @@ export function splitIntoCards(content: string): string[] {
   let currentLength = 0;
 
   const flushCard = () => {
+    // Drop divider and blank lines at the card edges — a trailing "---"
+    // with nothing under it renders as a dangling rule at the bottom of a
+    // card, and a leading one as a stray rule above the next card's title.
+    while (currentCardLines.length > 0) {
+      const first = currentCardLines[0].trim();
+      if (first !== '' && !DIVIDER_RE.test(first)) break;
+      currentCardLines.shift();
+    }
+    while (currentCardLines.length > 0) {
+      const last = currentCardLines[currentCardLines.length - 1].trim();
+      if (last !== '' && !DIVIDER_RE.test(last)) break;
+      currentCardLines.pop();
+    }
     if (currentCardLines.length > 0) {
       cards.push(currentCardLines.join('\n').trim());
-      currentCardLines = [];
-      currentLength = 0;
     }
+    currentCardLines = [];
+    currentLength = 0;
   };
 
   for (let i = 0; i < lines.length; i++) {
