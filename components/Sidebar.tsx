@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Conversation } from '@/lib/history';
 import {
   computeMastery,
@@ -239,9 +240,10 @@ type SidebarItemProps = {
   active: boolean;
   onSelect: () => void;
   onDelete: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 };
 
-function SidebarItem({ conversation, active, onSelect, onDelete }: SidebarItemProps) {
+function SidebarItem({ conversation, active, onSelect, onDelete, onContextMenu }: SidebarItemProps) {
   const [expanded, setExpanded] = useState(false);
   const mastery = useMemo(() => computeMastery(conversation), [conversation]);
 
@@ -255,7 +257,7 @@ function SidebarItem({ conversation, active, onSelect, onDelete }: SidebarItemPr
 
   return (
     <li className="group/item relative flex flex-col">
-      <div className="relative flex items-center">
+      <div className="relative flex items-center" onContextMenu={onContextMenu}>
         {hasChildren && (
           <button
             type="button"
@@ -368,6 +370,18 @@ export default function Sidebar({
     [conversations],
   );
 
+  // Right-click context menu on a history item.
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [contextMenu]);
+
   return (
     <>
       {/* Backdrop */}
@@ -446,6 +460,10 @@ export default function Sidebar({
                     active={c.id === activeId}
                     onSelect={() => onSelect(c)}
                     onDelete={() => onDelete(c.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenu({ x: e.clientX, y: e.clientY, id: c.id });
+                    }}
                   />
                 ))}
               </ul>
@@ -492,6 +510,44 @@ export default function Sidebar({
           )}
         </div>
       </nav>
+
+      {/* Right-click context menu for history items */}
+      {contextMenu &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[90]"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu(null);
+            }}
+          >
+            <div
+              role="menu"
+              className="absolute min-w-[160px] rounded-md border border-border-soft bg-surface py-1 shadow-lg"
+              style={{
+                left: Math.min(contextMenu.x, window.innerWidth - 176),
+                top: Math.min(contextMenu.y, window.innerHeight - 48),
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onDelete(contextMenu.id);
+                  setContextMenu(null);
+                }}
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm
+                  text-danger transition-colors hover:bg-state-hover"
+              >
+                <TrashIcon />
+                Delete topic
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
