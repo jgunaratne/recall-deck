@@ -8,11 +8,11 @@
 
 export type AIProvider = 'anthropic' | 'gemini';
 
-const DEFAULT_PROVIDER: AIProvider = (process.env.DEFAULT_AI_PROVIDER as AIProvider) || 'anthropic';
+const DEFAULT_PROVIDER: AIProvider = (process.env.DEFAULT_AI_PROVIDER as AIProvider) || 'gemini';
 
 /**
  * Resolve which provider to use from a request body.
- * Falls back to env var DEFAULT_AI_PROVIDER, then 'anthropic'.
+ * Falls back to env var DEFAULT_AI_PROVIDER, then 'gemini'.
  */
 export function resolveProvider(body: { provider?: string }): AIProvider {
   const p = body.provider?.toLowerCase();
