@@ -530,7 +530,7 @@ export default function Message({
       void fetch('/api/images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: block }),
+        body: JSON.stringify({ content: block, provider }),
       })
         .then(async (response) => {
           if (!response.ok) throw new Error('Image generation failed');
@@ -550,7 +550,7 @@ export default function Message({
           });
         });
     }
-  }, [blocks, imageGenerationVersion, isLastMessage, isStreaming, isUser]);
+  }, [blocks, imageGenerationVersion, isLastMessage, isStreaming, isUser, provider]);
 
   const regenerateImage = (index: number, block: string) => {
     requestedImages.current.delete(`${index}:${block}`);
@@ -622,7 +622,7 @@ export default function Message({
               )}
               {/* Voice tutor lives on the latest lecture only — one Live
                   session at a time, following the newest cards. */}
-              {topic && isLastMessage && provider === 'gemini' && (
+              {topic && isLastMessage && (provider === 'gemini' || provider === 'anthropic') && (
                 <GeminiLiveOverlay
                   topic={topic}
                   readingLevel={readingLevel}

@@ -26,6 +26,33 @@ export async function POST(request: Request) {
 
     const prompt = illustrationPrompt(body.content);
 
+    async function generateWithGemini() {
+      const result = await getGeminiClient().models.generateContent({
+        model: GEMINI_IMAGE_MODEL,
+        contents: prompt,
+        config: {
+          responseModalities: ['IMAGE'],
+          imageConfig: { aspectRatio: '3:2' },
+        },
+      });
+      const image = result.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data)?.inlineData;
+      if (!image?.data) throw new Error('Gemini returned no image data.');
+      return Response.json({
+        image: `data:${image.mimeType || 'image/png'};base64,${image.data}`,
+        provider: 'gemini',
+      });
+    }
+
+    // Claude has no image model, so when it's the selected provider the standing
+    // rule is to illustrate with Gemini rather than silently charge OpenAI.
+    if (body.provider === 'anthropic') {
+      if (process.env.GEMINI_API_KEY) return await generateWithGemini();
+      return Response.json(
+        { error: 'Image generation with Claude selected requires GEMINI_API_KEY.' },
+        { status: 503 },
+      );
+    }
+
     // Do not silently charge Gemini after an OpenAI failure. Gemini is only
     // used when OpenAI has not been configured.
     if (process.env.OPENAI_API_KEY) {
@@ -42,20 +69,7 @@ export async function POST(request: Request) {
     }
 
     if (process.env.GEMINI_API_KEY) {
-      const result = await getGeminiClient().models.generateContent({
-        model: GEMINI_IMAGE_MODEL,
-        contents: prompt,
-        config: {
-          responseModalities: ['IMAGE'],
-          imageConfig: { aspectRatio: '3:2' },
-        },
-      });
-      const image = result.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data)?.inlineData;
-      if (!image?.data) throw new Error('Gemini returned no image data.');
-      return Response.json({
-        image: `data:${image.mimeType || 'image/png'};base64,${image.data}`,
-        provider: 'gemini',
-      });
+      return await generateWithGemini();
     }
 
     return Response.json(
