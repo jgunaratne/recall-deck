@@ -5,6 +5,26 @@ export type Topic = {
   prompt: string;
 };
 
+export const TOPIC_CATEGORIES = [
+  'science',
+  'humanities',
+  'social-science',
+  'business',
+  'technology',
+  'careers',
+] as const;
+
+export type TopicCategory = (typeof TOPIC_CATEGORIES)[number];
+
+export const TOPIC_CATEGORY_LABELS: Record<TopicCategory, string> = {
+  science: 'Science',
+  humanities: 'Humanities',
+  'social-science': 'Social Science',
+  business: 'Business & Finance',
+  technology: 'Technology',
+  careers: 'Jobs & Careers',
+};
+
 const ELEMENTARY_TOPICS: Topic[] = [
   { label: 'Sky colors', prompt: 'Why is the sky blue?' },
   { label: 'Fish secrets', prompt: 'How do fish breathe underwater?' },
@@ -162,4 +182,43 @@ export function pickProfessionalTopics(count = 6, exclude?: Set<string>): Topic[
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   return pool.slice(0, count);
+}
+
+const CATEGORY_KEYWORDS: Record<Exclude<TopicCategory, 'careers'>, RegExp> = {
+  science: /sky|fish|leaf|cloud|bird|rain|rainbow|seed|moon|magnet|shadow|butterfly|ocean|star|muscle|gravity|battery|water cycle|earthquake|sleep|plant|black hole|dna|volcano|ice|animal|sound|selection|bond|vaccine|cell cycle|electricity|climate|lens|atom|tectonic|photosynthesis|quadratic|digestive|newton|crispr|quantum|relativity|thermodynamics|mRNA/i,
+  humanities: /french revolution|cold war|history|language|philosophy|art|literature|ethics|culture/i,
+  'social-science': /game theory|bayes|mechanism design|probability|monty hall|psychology|society|politic/i,
+  business: /supply and demand|market|salary|finance|economy|negotiat/i,
+  technology: /internet|encryption|b-tree|consensus|p vs np|compiler|neural|cap theorem|crypto|lambda|type system|database|computer/i,
+};
+
+function shuffled<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
+
+/** Pick topic chips for one iOS-style subject section. */
+export function pickTopicsForCategory(
+  category: TopicCategory,
+  level: ReadingLevel,
+  count = 5,
+  exclude?: Set<string>,
+): Topic[] {
+  const source = category === 'careers'
+    ? PROFESSIONAL_TOPICS
+    : TOPIC_POOLS[level].filter((topic) => CATEGORY_KEYWORDS[category].test(`${topic.label} ${topic.prompt}`));
+  const available = source.filter((topic) => !exclude?.has(topic.prompt));
+  const fallback = category === 'careers' ? PROFESSIONAL_TOPICS : TOPIC_POOLS[level];
+  const fill = fallback.filter((topic) => !exclude?.has(topic.prompt) && !available.some((item) => item.prompt === topic.prompt));
+  return shuffled([...available, ...fill]).slice(0, count);
+}
+
+export function pickTopicSections(level: ReadingLevel, count = 5): Record<TopicCategory, Topic[]> {
+  return Object.fromEntries(
+    TOPIC_CATEGORIES.map((category) => [category, pickTopicsForCategory(category, level, count)]),
+  ) as Record<TopicCategory, Topic[]>;
 }

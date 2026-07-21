@@ -1,24 +1,33 @@
 /**
- * AI provider abstraction — switches between Anthropic and Gemini
+ * AI provider abstraction — switches between Anthropic, Gemini, and OpenAI
  * based on the `provider` field in request bodies.
  *
  * Each route uses these helpers so the provider toggle is a single
  * code path, not duplicated per-endpoint.
  */
 
-export type AIProvider = 'anthropic' | 'gemini';
+const AI_PROVIDERS = ['anthropic', 'gemini', 'openai'] as const;
 
-const DEFAULT_PROVIDER: AIProvider = (process.env.DEFAULT_AI_PROVIDER as AIProvider) || 'gemini';
+export type AIProvider = (typeof AI_PROVIDERS)[number];
+
+function isAIProvider(provider: string | undefined): provider is AIProvider {
+  return AI_PROVIDERS.includes(provider as AIProvider);
+}
+
+const DEFAULT_PROVIDER: AIProvider = isAIProvider(process.env.DEFAULT_AI_PROVIDER)
+  ? process.env.DEFAULT_AI_PROVIDER
+  : 'openai';
 
 /**
  * Resolve which provider to use from a request body.
- * Falls back to env var DEFAULT_AI_PROVIDER, then 'gemini'.
+ * Falls back to env var DEFAULT_AI_PROVIDER, then 'openai'.
  */
 export function resolveProvider(body: { provider?: string }): AIProvider {
   const p = body.provider?.toLowerCase();
-  if (p === 'gemini') return 'gemini';
-  if (p === 'anthropic') return 'anthropic';
-  return DEFAULT_PROVIDER;
+  if (isAIProvider(p)) return p;
+  return isProviderAvailable(DEFAULT_PROVIDER)
+    ? DEFAULT_PROVIDER
+    : getPreferredAvailableProvider() ?? DEFAULT_PROVIDER;
 }
 
 /**
@@ -27,6 +36,7 @@ export function resolveProvider(body: { provider?: string }): AIProvider {
 export function isProviderAvailable(provider: AIProvider): boolean {
   if (provider === 'anthropic') return !!process.env.ANTHROPIC_API_KEY;
   if (provider === 'gemini') return !!process.env.GEMINI_API_KEY;
+  if (provider === 'openai') return !!process.env.OPENAI_API_KEY;
   return false;
 }
 
@@ -35,17 +45,28 @@ export function isProviderAvailable(provider: AIProvider): boolean {
  */
 export function getAvailableProviders(): AIProvider[] {
   const providers: AIProvider[] = [];
-  if (process.env.ANTHROPIC_API_KEY) providers.push('anthropic');
+  if (process.env.OPENAI_API_KEY) providers.push('openai');
   if (process.env.GEMINI_API_KEY) providers.push('gemini');
+  if (process.env.ANTHROPIC_API_KEY) providers.push('anthropic');
   return providers;
+}
+
+export function getPreferredAvailableProvider(): AIProvider | null {
+  return getAvailableProviders().find((provider) => isProviderAvailable(provider)) ?? null;
 }
 
 /**
  * Return the other provider if it's available, or null if no fallback exists.
  */
 export function getFallbackProvider(primary: AIProvider): AIProvider | null {
-  const other: AIProvider = primary === 'anthropic' ? 'gemini' : 'anthropic';
-  return isProviderAvailable(other) ? other : null;
+  const preference: AIProvider[] =
+    primary === 'gemini'
+      ? ['openai', 'anthropic']
+      : primary === 'openai'
+        ? ['gemini', 'anthropic']
+        : ['gemini', 'openai'];
+
+  return preference.find(isProviderAvailable) ?? null;
 }
 
 /**

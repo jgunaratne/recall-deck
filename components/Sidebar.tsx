@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Image from 'next/image';
 import type { Conversation } from '@/lib/history';
 import {
   computeMastery,
@@ -11,13 +12,15 @@ import {
   type TopicMastery,
 } from '@/lib/mastery';
 import { READING_LEVELS, READING_LEVEL_LABELS, type ReadingLevel } from '@/lib/prompts';
+import { MICROPHONE_INPUT_STORAGE_KEY } from '@/lib/audio-input';
 
 const PROVIDER_LABELS: Record<string, string> = {
   gemini: 'Gemini',
   anthropic: 'Claude',
+  openai: 'OpenAI',
 };
 
-const ALL_PROVIDERS = ['anthropic', 'gemini'];
+const ALL_PROVIDERS = ['anthropic', 'gemini', 'openai'];
 
 const SLIDER_THUMB_CLASSES =
   '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent ' +
@@ -84,6 +87,55 @@ function ReadingLevelSlider({
         <span>Elementary</span>
         <span>University</span>
       </div>
+    </div>
+  );
+}
+
+function MicrophoneInputSelector({ open }: { open: boolean }) {
+  const [inputs, setInputs] = useState<MediaDeviceInfo[]>([]);
+  const [selectedInputId, setSelectedInputId] = useState('');
+
+  useEffect(() => {
+    if (!open || !navigator.mediaDevices) return;
+    const refresh = async () => {
+      const available = (await navigator.mediaDevices.enumerateDevices())
+        .filter((device) => device.kind === 'audioinput');
+      setInputs(available);
+      const saved = window.localStorage.getItem(MICROPHONE_INPUT_STORAGE_KEY);
+      const selected = available.some((device) => device.deviceId === saved)
+        ? saved || ''
+        : available[0]?.deviceId || '';
+      setSelectedInputId(selected);
+      if (!saved && selected) window.localStorage.setItem(MICROPHONE_INPUT_STORAGE_KEY, selected);
+    };
+    void refresh();
+    navigator.mediaDevices.addEventListener('devicechange', refresh);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', refresh);
+  }, [open]);
+
+  if (inputs.length < 2) return null;
+
+  return (
+    <div>
+      <label htmlFor="voice-microphone" className="block px-1 pb-1.5 text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
+        Microphone
+      </label>
+      <select
+        id="voice-microphone"
+        value={selectedInputId}
+        onChange={(event) => {
+          const deviceId = event.target.value;
+          setSelectedInputId(deviceId);
+          window.localStorage.setItem(MICROPHONE_INPUT_STORAGE_KEY, deviceId);
+        }}
+        className="h-8 w-full cursor-pointer rounded-md border border-border-subtle bg-surface px-2 text-xs text-text-secondary outline-none focus:border-accent"
+      >
+        {inputs.map((input, index) => (
+          <option key={input.deviceId} value={input.deviceId}>
+            {input.label || `Microphone ${index + 1}`}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -396,17 +448,14 @@ export default function Sidebar({
       <nav
         aria-label="Sidebar"
         className={`group/sidebar fixed left-0 top-0 z-[70] flex h-dvh w-[var(--sidebar-width)] flex-col
-          border-r-[0.5px] border-border-subtle bg-page
-          bg-gradient-to-t from-[rgba(245,244,237,0.05)] to-[rgba(245,244,237,0.3)]
+          border-r-[0.5px] border-border-subtle bg-page shadow-popover
           transition-transform duration-200
           ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Header: wordmark + close toggle */}
         <div className="flex w-full items-center justify-between p-2">
           <span className="flex h-8 items-center gap-2 overflow-hidden whitespace-nowrap pl-2 font-serif text-lg text-text-primary">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden>
-              <path d="M12 2c.6 4.8 1.9 7.4 4 9 1.5 1.1 3.4 1.7 6 2-2.6.3-4.5.9-6 2-2.1 1.6-3.4 4.2-4 9-.6-4.8-1.9-7.4-4-9-1.5-1.1-3.4-1.7-6-2 2.6-.3 4.5-.9 6-2 2.1-1.6 3.4-4.2 4-9z" />
-            </svg>
+            <Image src="/recall-tutor-icon.png" alt="" width={28} height={28} className="h-6 w-6 shrink-0 rounded-md" />
             Recall Tutor
           </span>
           <button
@@ -426,7 +475,7 @@ export default function Sidebar({
             type="button"
             onClick={onNewChat}
             title="New topic"
-            className="flex h-8 cursor-pointer items-center gap-3 rounded-sm px-2 text-sm text-text-secondary
+            className="flex h-10 cursor-pointer items-center gap-3 rounded-md px-3 text-sm text-text-secondary
               transition-colors hover:bg-state-hover"
           >
             <span className="text-text-primary"><PlusIcon /></span>
@@ -479,11 +528,10 @@ export default function Sidebar({
         <div className="flex flex-col gap-4 border-t-[0.5px] border-border-subtle p-3">
           <ReadingLevelSlider value={readingLevel} onChange={onReadingLevelChange} />
 
-          {providers.length > 0 && (
-            <div>
-              <div className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
-                Model
-              </div>
+          <div>
+            <div className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-[0.5px] text-text-tertiary">
+              Model
+            </div>
             <div className="flex rounded-md bg-state-hover p-0.5" role="radiogroup" aria-label="Model selection">
               {ALL_PROVIDERS.map((p) => {
                 const available = providers.includes(p);
@@ -505,9 +553,15 @@ export default function Sidebar({
                   </button>
                 );
               })}
-              </div>
             </div>
-          )}
+            {!providers.length && (
+              <p className="mt-1 px-1 text-[10px] leading-relaxed text-text-tertiary">
+                Add an API key in `.env.local` to enable one of the providers.
+              </p>
+            )}
+          </div>
+
+          <MicrophoneInputSelector open={open} />
         </div>
       </nav>
 

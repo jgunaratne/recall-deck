@@ -1,7 +1,15 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
 import { getGeminiClient, GEMINI_MODELS, withGeminiFallback } from '@/lib/gemini';
+import { getOpenAIClient, OPENAI_MODELS, toOpenAIInput } from '@/lib/openai';
 import { getChatSystemPrompt, READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
-import { resolveProvider, getFallbackProvider, shouldFallback, type AIProvider } from '@/lib/provider';
+import {
+  resolveProvider,
+  getFallbackProvider,
+  isProviderAvailable,
+  shouldFallback,
+  getPreferredAvailableProvider,
+  type AIProvider,
+} from '@/lib/provider';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +22,14 @@ function describeChatError(error: unknown): { status: number; message: string } 
     // Gemini errors embed the upstream JSON body in the message.
     const match = raw.match(/"code"\s*:\s*(\d{3})/);
     if (match) code = parseInt(match[1], 10);
+  }
+
+  if (/exceeded your current quota|billing details|insufficient_quota/i.test(raw)) {
+    return {
+      status: 429,
+      message:
+        'The OpenAI account has no available API quota. Check billing and project limits, then try again.',
+    };
   }
 
   if (code === 503 || code === 529) {
@@ -88,8 +104,50 @@ async function createStream(
         }
       },
     });
-  } else {
-    // Anthropic
+  }
+
+  if (provider === 'openai') {
+    const client = getOpenAIClient();
+    const stream = await client.responses.create({
+      model: OPENAI_MODELS.CHAT,
+      instructions: systemPrompt,
+      input: toOpenAIInput(messages),
+      // Lectures include D3/Mermaid code blocks, which are token-hungry.
+      max_output_tokens: 8192,
+      store: false,
+      stream: true,
+    });
+
+    return new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const event of stream) {
+            if (event.type === 'response.output_text.delta') {
+              const data = JSON.stringify({ type: 'text', text: event.delta });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            } else if (event.type === 'response.failed') {
+              const message = event.response.error?.message || 'OpenAI response failed';
+              const data = JSON.stringify({ type: 'error', error: message });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            } else if (event.type === 'error') {
+              const data = JSON.stringify({ type: 'error', error: event.message });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            }
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (error) {
+          console.error('Chat stream error:', error instanceof Error ? error.message : error);
+          const data = JSON.stringify({ type: 'error', error: describeChatError(error).message });
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          controller.close();
+        }
+      },
+    });
+  }
+
+  // Anthropic
+  {
     const client = getAnthropicClient();
     const stream = await client.messages.stream({
       model: MODELS.CHAT,
@@ -130,10 +188,24 @@ export async function POST(req: Request) {
     const body = await req.json();
     const messages = body.messages;
     const provider = resolveProvider(body);
+    const preferredProvider = getPreferredAvailableProvider();
     const readingLevel: ReadingLevel = READING_LEVELS.includes(body.readingLevel)
       ? body.readingLevel
       : 'high';
     const systemPrompt = getChatSystemPrompt(readingLevel);
+
+    if (!preferredProvider) {
+      return new Response(
+        JSON.stringify({
+          error:
+            'No AI provider is configured. Add ANTHROPIC_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY to .env.local.',
+        }),
+        {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: 'Messages array is required' }), {
@@ -161,15 +233,15 @@ export async function POST(req: Request) {
     let readable: ReadableStream;
     // The provider that actually serves the response — differs from the
     // requested one only when the retryable-error fallback kicks in.
-    let servedBy = provider;
+    let servedBy = isProviderAvailable(provider) ? provider : preferredProvider;
     try {
-      readable = await createStream(provider, messages, systemPrompt);
+      readable = await createStream(servedBy, messages, systemPrompt);
     } catch (error) {
       // If the primary provider fails with a retryable error, try the fallback
-      const fallback = getFallbackProvider(provider);
+      const fallback = getFallbackProvider(servedBy);
       if (fallback && shouldFallback(error)) {
         console.warn(
-          `Primary provider "${provider}" failed (${error instanceof Error ? error.message : error}), falling back to "${fallback}"`,
+          `Primary provider "${servedBy}" failed (${error instanceof Error ? error.message : error}), falling back to "${fallback}"`,
         );
         readable = await createStream(fallback, messages, systemPrompt);
         servedBy = fallback;

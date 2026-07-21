@@ -179,7 +179,7 @@ export default function TopicCarousel({
               type="button"
               onClick={() => onSelect(seed.prompt)}
               className={`group relative flex w-[200px] shrink-0 cursor-pointer flex-col gap-1
-                rounded-lg border p-3 text-left transition-colors
+                rounded-lg border p-3 text-left shadow-[0_1px_2px_rgba(28,25,23,0.03)] transition-colors
                 ${isComplete
                   ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50 hover:bg-emerald-500/10'
                   : isPartial

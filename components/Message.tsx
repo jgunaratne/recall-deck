@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import { LoaderCircle, RotateCw } from 'lucide-react';
+import katex from 'katex';
 import MermaidBlock from './MermaidBlock';
 import D3Block from './D3Block';
 import RenderingSpinner from './RenderingSpinner';
 import GeminiLiveOverlay from './GeminiLiveOverlay';
+import OpenAIRealtimeOverlay from './OpenAIRealtimeOverlay';
 import { splitIntoCards } from '@/lib/cards';
 import type { ReadingLevel } from '@/lib/prompts';
 
@@ -15,50 +18,30 @@ interface MessageProps {
   isLastMessage?: boolean;
   showQuizButton?: boolean;
   onQuizMe?: () => void;
-  /** Topic the user asked about — used for Gemini Live context */
+  /** Topic the user asked about - used for voice tutor context */
   topic?: string;
+  /** AI provider selected for the current chat */
+  provider?: string;
   /** Current reading level */
   readingLevel?: ReadingLevel;
-  /** Quiz context to inject into Gemini Live */
+  /** Quiz context to inject into the live voice tutor */
   quizContext?: string | null;
-  /** Answer result to inject into Gemini Live when student answers a quiz question */
+  /** Answer result to inject into the live voice tutor when student answers a quiz question */
   answerResult?: string | null;
-  /** Final quiz result to inject into Gemini Live when the quiz ends */
+  /** Final quiz result to inject into the live voice tutor when the quiz ends */
   quizResult?: string | null;
   /** Whether the quiz is currently active/open */
   isQuizActive?: boolean;
 }
 
-// Convert standard LaTeX equations/formulas into clean readable Unicode
-function cleanMathText(math: string): string {
-  return math
-    .replace(/\\text\{([^}]+)\}/g, '$1') // Strip \text{...} wrappers
-    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2') // \frac{a}{b} -> a/b
-    .replace(/\\sqrt\{([^}]+)\}/g, '√($1)')
-    .replace(/\\bar\{([^}]+)\}/g, '$1̄') // combining macron: x̄
-    .replace(/\\hat\{([^}]+)\}/g, '$1̂') // combining circumflex: x̂
-    .replace(/\^?\\circ/g, '°')          // Convert \circ or ^\circ to degree symbol
-    .replace(/\\pm/g, '±')              // Convert standard symbols
-    .replace(/\\times/g, '×')
-    .replace(/\\div/g, '÷')
-    .replace(/\\le/g, '≤')
-    .replace(/\\ge/g, '≥')
-    .replace(/\\mu/g, 'μ')
-    .replace(/\\sigma/g, 'σ')
-    .replace(/\\alpha/g, 'α')
-    .replace(/\\beta/g, 'β')
-    .replace(/\\epsilon/g, 'ε')
-    .replace(/\\lambda/g, 'λ')
-    .replace(/\\theta/g, 'θ')
-    .replace(/\\pi/g, 'π')
-    .replace(/\\Delta/g, 'Δ')
-    .replace(/\\sum/g, 'Σ')
-    .replace(/\\cdot/g, '·')
-    .replace(/\\approx/g, '≈')
-    .replace(/\\neq/g, '≠')
-    .replace(/\\infty/g, '∞')
-    .replace(/\\/g, '')                  // Remove residual backslashes
-    .replace(/[{}]/g, '');               // Remove residual braces
+function MathExpression({ math, display = false }: { math: string; display?: boolean }) {
+  const html = katex.renderToString(math, {
+    displayMode: display,
+    throwOnError: false,
+    strict: 'ignore',
+  });
+
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 // Strip card prefix labels like "Card 1: " or "Card 2 - " from headers
@@ -73,7 +56,7 @@ function stripCardLabel(text: string): string {
 // Inline Markdown Parser supporting bold, italic, inline code, links, and inline math $...$
 // Matches inline code (`code`), bold (**bold**), italic (*italic*), links ([text](url)),
 // and inline math ($math$ — first/last chars non-space, so "$5 and" prose is left alone)
-const INLINE_TOKEN_REGEX = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|\$[^\s$](?:[^$\n]*[^\s$])?\$)/g;
+const INLINE_TOKEN_REGEX = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|\\\([^\n]+?\\\)|\$[^\s$](?:[^$\n]*[^\s$])?\$)/g;
 
 function parseInline(text: string): React.ReactNode[] {
   const parts = text.split(INLINE_TOKEN_REGEX);
@@ -110,10 +93,17 @@ function parseInline(text: string): React.ReactNode[] {
         );
       }
     }
+    if (part.startsWith('\\(') && part.endsWith('\\)') && part.length > 4) {
+      return (
+        <span key={index} className="px-0.5 text-text-primary">
+          <MathExpression math={part.slice(2, -2)} />
+        </span>
+      );
+    }
     if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
       return (
-        <span key={index} className="rounded-sm bg-state-hover-soft px-1 font-mono text-[0.92em] text-text-secondary">
-          {cleanMathText(part.slice(1, -1))}
+        <span key={index} className="px-0.5 text-text-primary">
+          <MathExpression math={part.slice(1, -1)} />
         </span>
       );
     }
@@ -283,12 +273,27 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
         // Group consecutive table rows (| ... |) so they render as real
         // tables instead of falling through to plain text. Blank lines
         // between rows are tolerated — models sometimes emit them.
-        type LineItem = { kind: 'line'; line: string } | { kind: 'table'; rows: string[] };
+        type LineItem =
+          | { kind: 'line'; line: string }
+          | { kind: 'table'; rows: string[] }
+          | { kind: 'math'; formula: string };
         const items: LineItem[] = [];
         for (let i = 0; i < lines.length; i++) {
           const t = lines[i].trim();
           const prev = items[items.length - 1];
-          if (t.startsWith('|') && t.endsWith('|') && t.length > 2) {
+          const oneLineMath = t.match(/^(?:\\\[|\$\$)\s*(.*?)\s*(?:\\\]|\$\$)$/);
+          if (oneLineMath) {
+            items.push({ kind: 'math', formula: oneLineMath[1] });
+          } else if (t === '\\[' || t === '$$') {
+            const closingDelimiter = t === '\\[' ? '\\]' : '$$';
+            const formulaLines: string[] = [];
+            while (i + 1 < lines.length) {
+              i += 1;
+              if (lines[i].trim() === closingDelimiter) break;
+              formulaLines.push(lines[i]);
+            }
+            items.push({ kind: 'math', formula: formulaLines.join('\n').trim() });
+          } else if (t.startsWith('|') && t.endsWith('|') && t.length > 2) {
             if (prev?.kind === 'table') {
               prev.rows.push(t);
             } else {
@@ -319,22 +324,20 @@ function renderBlock(blockText: string, key: number, showCursor: boolean): React
                 return <MarkdownTable key={lIdx} rows={item.rows} />;
               }
 
-              const line = item.line;
-              const trimmed = line.trim();
-
-              // Block Math: $$ equation $$
-              if (trimmed.startsWith('$$') && trimmed.endsWith('$$')) {
-                const formulaText = trimmed.slice(2, -2).trim();
+              if (item.kind === 'math') {
                 return (
                   <div
                     key={lIdx}
-                    className="my-3 overflow-x-auto rounded-lg bg-state-hover-soft px-4 py-3.5 text-center font-mono text-sm text-text-primary md:text-base"
+                    className="my-3 overflow-x-auto rounded-lg bg-state-hover-soft px-4 py-3.5 text-center text-text-primary"
                   >
-                    {cleanMathText(formulaText)}
+                    <MathExpression math={item.formula} display />
                     {lineCursor && <StreamCursor />}
                   </div>
                 );
               }
+
+              const line = item.line;
+              const trimmed = line.trim();
 
               // Horizontal Rule: --- or ***
               if (trimmed === '---' || trimmed === '***' || /^-{3,}$/.test(trimmed) || /^\*{3,}$/.test(trimmed)) {
@@ -487,6 +490,7 @@ export default function Message({
   showQuizButton,
   onQuizMe,
   topic,
+  provider,
   readingLevel = 'high',
   quizContext,
   answerResult,
@@ -495,12 +499,68 @@ export default function Message({
 }: MessageProps) {
   const isUser = role === 'user';
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [cardImages, setCardImages] = useState<Record<number, string>>({});
+  const [imagesLoading, setImagesLoading] = useState<Set<number>>(new Set());
+  const [imageGenerationVersion, setImageGenerationVersion] = useState(0);
+  const requestedImages = React.useRef(new Set<string>());
 
   // Group content into larger, fewer blocks (targeting ~1200 chars per card)
   const blocks = React.useMemo(() => {
     if (isUser) return [];
     return splitIntoCards(content);
   }, [content, isUser]);
+
+  // Match the iOS behavior: generate illustrations for the three largest
+  // cards once the lecture has finished streaming.
+  React.useEffect(() => {
+    if (isUser || !isLastMessage || isStreaming || blocks.length < 2) return;
+
+    const imageIndices = blocks
+      .map((block, index) => ({ block, index }))
+      .filter(({ block }) => block.length > 150)
+      .sort((a, b) => b.block.length - a.block.length)
+      .slice(0, 3);
+
+    for (const { block, index } of imageIndices) {
+      const requestKey = `${index}:${block}`;
+      if (requestedImages.current.has(requestKey)) continue;
+      requestedImages.current.add(requestKey);
+      setImagesLoading((current) => new Set(current).add(index));
+
+      void fetch('/api/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: block }),
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('Image generation failed');
+          return response.json() as Promise<{ image?: string }>;
+        })
+        .then(({ image }) => {
+          if (image) setCardImages((current) => ({ ...current, [index]: image }));
+        })
+        .catch(() => {
+          // The lecture stays usable when an illustration cannot be created.
+        })
+        .finally(() => {
+          setImagesLoading((current) => {
+            const next = new Set(current);
+            next.delete(index);
+            return next;
+          });
+        });
+    }
+  }, [blocks, imageGenerationVersion, isLastMessage, isStreaming, isUser]);
+
+  const regenerateImage = (index: number, block: string) => {
+    requestedImages.current.delete(`${index}:${block}`);
+    setCardImages((current) => {
+      const next = { ...current };
+      delete next[index];
+      return next;
+    });
+    setImageGenerationVersion((version) => version + 1);
+  };
 
   // While streaming, new cards accumulate off-screen: the user stays on the
   // card they're reading and advances at their own pace (the counter and
@@ -562,8 +622,21 @@ export default function Message({
               )}
               {/* Voice tutor lives on the latest lecture only — one Live
                   session at a time, following the newest cards. */}
-              {topic && isLastMessage && (
+              {topic && isLastMessage && provider === 'gemini' && (
                 <GeminiLiveOverlay
+                  topic={topic}
+                  readingLevel={readingLevel}
+                  isStreaming={!!isStreaming}
+                  currentCardContent={currentBlock}
+                  quizContext={quizContext ?? null}
+                  answerResult={answerResult ?? null}
+                  quizResult={quizResult ?? null}
+                  allCards={blocks}
+                  isQuizActive={isQuizActive}
+                />
+              )}
+              {topic && isLastMessage && provider === 'openai' && (
+                <OpenAIRealtimeOverlay
                   topic={topic}
                   readingLevel={readingLevel}
                   isStreaming={!!isStreaming}
@@ -580,6 +653,40 @@ export default function Message({
           </div>
 
           {/* Card content */}
+          {(cardImages[safeIndex] || imagesLoading.has(safeIndex)) && (
+            <div className="relative px-5 pt-4">
+              {cardImages[safeIndex] ? (
+                <>
+                  <img
+                    src={cardImages[safeIndex]}
+                    alt=""
+                    className="aspect-[3/2] w-full rounded-md border border-border-soft object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => regenerateImage(safeIndex, currentBlock)}
+                    title="Regenerate illustration"
+                    aria-label="Regenerate illustration"
+                    className="absolute right-7 top-6 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-border-soft bg-surface/90 text-text-secondary shadow-sm backdrop-blur-sm transition-colors hover:bg-state-hover hover:text-text-primary"
+                  >
+                    <RotateCw size={15} aria-hidden />
+                  </button>
+                </>
+              ) : (
+                <div
+                  className="relative flex aspect-[3/2] w-full items-center justify-center overflow-hidden rounded-md bg-state-hover-soft"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="image-shimmer absolute inset-y-0 w-2/5 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.72),transparent)]" />
+                  <span className="relative z-10 inline-flex items-center gap-2 rounded-full border border-border-soft bg-surface/85 px-3 py-1.5 text-sm text-text-secondary shadow-sm backdrop-blur-sm">
+                    <LoaderCircle size={15} className="animate-spin" aria-hidden />
+                    Generating illustration
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           <div
             key={safeIndex}
             className="min-h-[100px] flex-1 animate-fade-in px-5 py-4 font-text text-base text-text-primary"

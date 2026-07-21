@@ -1,7 +1,8 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
 import { getGeminiClient, GEMINI_MODELS, withGeminiFallback } from '@/lib/gemini';
+import { getOpenAIClient, OPENAI_MODELS } from '@/lib/openai';
 import { MONTY_SYSTEM_PROMPT, getMontyReactUserPrompt } from '@/lib/prompts';
-import { resolveProvider } from '@/lib/provider';
+import { getPreferredAvailableProvider, resolveProvider } from '@/lib/provider';
 
 export const runtime = 'nodejs';
 
@@ -10,6 +11,14 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { question, chosen, correct, was_correct, streak, response_time_s } = body;
     const provider = resolveProvider(body);
+    const preferredProvider = getPreferredAvailableProvider();
+
+    if (!preferredProvider) {
+      return new Response(JSON.stringify({ error: 'No AI provider is configured' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     // Validate required fields
     if (!question || !chosen || !correct || typeof was_correct !== 'boolean' || typeof streak !== 'number') {
@@ -29,7 +38,7 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     let readable: ReadableStream;
 
-    if (provider === 'gemini') {
+    if (provider === 'gemini' && process.env.GEMINI_API_KEY) {
       const ai = getGeminiClient();
 
       const responseStream = await withGeminiFallback(GEMINI_MODELS.QUIZ_REACT, (model) =>
@@ -78,8 +87,59 @@ export async function POST(req: Request) {
           }
         },
       });
+    } else if (provider === 'openai' && process.env.OPENAI_API_KEY) {
+      const client = getOpenAIClient();
+
+      const stream = await client.responses.create({
+        model: OPENAI_MODELS.QUIZ_REACT,
+        instructions: MONTY_SYSTEM_PROMPT,
+        input: getMontyReactUserPrompt({
+          question,
+          chosen: { text: chosen.text, why_tempting: chosen.why_tempting },
+          correct: { text: correct.text, why_tempting: correct.why_tempting },
+          was_correct,
+          streak,
+          response_time_s: typeof response_time_s === 'number' ? response_time_s : 0,
+        }),
+        max_output_tokens: 256,
+        store: false,
+        stream: true,
+      });
+
+      readable = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const event of stream) {
+              if (event.type === 'response.output_text.delta') {
+                const data = JSON.stringify({ type: 'text', text: event.delta });
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              } else if (event.type === 'response.failed') {
+                const errorMessage = event.response.error?.message || 'OpenAI response failed';
+                const data = JSON.stringify({ type: 'error', error: errorMessage });
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              } else if (event.type === 'error') {
+                const data = JSON.stringify({ type: 'error', error: event.message });
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              }
+            }
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Stream error';
+            const data = JSON.stringify({ type: 'error', error: errorMessage });
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            controller.close();
+          }
+        },
+      });
     } else {
       // Anthropic
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return new Response(JSON.stringify({ error: 'Anthropic is not configured' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       const client = getAnthropicClient();
 
       const stream = await client.messages.stream({

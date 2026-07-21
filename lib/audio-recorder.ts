@@ -1,5 +1,7 @@
-// Browser-side audio recorder — captures microphone as PCM 16kHz mono Int16 base64 chunks.
+// Browser-side audio recorder — captures microphone as PCM mono Int16 base64 chunks.
 // Based on the Hansel project pattern for Gemini Live integration.
+
+import { MICROPHONE_INPUT_STORAGE_KEY } from './audio-input';
 
 const SAMPLE_RATE = 16_000;
 const BUFFER_SIZE = 4096;
@@ -50,6 +52,8 @@ export function downsample(
 }
 
 export class AudioRecorder {
+  constructor(private readonly targetSampleRate = SAMPLE_RATE) {}
+
   private _audioContext: AudioContext | null = null;
   private _stream: MediaStream | null = null;
   private _sourceNode: MediaStreamAudioSourceNode | null = null;
@@ -69,9 +73,9 @@ export class AudioRecorder {
   }
 
   /**
-   * Begin recording from the user's microphone.
-   * Each captured chunk is converted to Int16 PCM at 16 kHz and delivered
-   * as a base64 string via the `onData` callback.
+ * Begin recording from the user's microphone. Each captured chunk is
+ * converted to Int16 PCM at the configured target rate and delivered as a
+ * base64 string via the `onData` callback.
    */
   async start(onData: (base64: string) => void): Promise<void> {
     if (this._isRecording) return;
@@ -81,9 +85,9 @@ export class AudioRecorder {
       // triggered this call is still fresh — getUserMedia may show a
       // permission prompt that outlives the activation window.
       try {
-        this._audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+        this._audioContext = new AudioContext({ sampleRate: this.targetSampleRate });
       } catch {
-        // Some browsers reject a forced 16 kHz rate; capture at the native
+      // Some browsers reject a forced sample rate; capture at the native
         // rate and downsample per-chunk instead.
         this._audioContext = new AudioContext();
       }
@@ -98,12 +102,15 @@ export class AudioRecorder {
         throw new Error('Audio capture could not start — try clicking the mic again');
       }
 
+      const microphoneInputId = window.localStorage.getItem(MICROPHONE_INPUT_STORAGE_KEY);
       this._stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          sampleRate: SAMPLE_RATE,
+          ...(microphoneInputId ? { deviceId: { exact: microphoneInputId } } : {}),
+          sampleRate: this.targetSampleRate,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true,
         },
       });
 
@@ -125,7 +132,7 @@ export class AudioRecorder {
       this._processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
         if (!this._isRecording) return;
         const inputData = event.inputBuffer.getChannelData(0);
-        const resampled = downsample(inputData, contextRate, SAMPLE_RATE);
+        const resampled = downsample(inputData, contextRate, this.targetSampleRate);
         const int16Data = float32ToInt16(resampled);
         const base64 = arrayBufferToBase64(int16Data.buffer as ArrayBuffer);
         onData(base64);

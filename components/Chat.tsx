@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useSyncExternalStore } from 'react';
+import Image from 'next/image';
 import Message from './Message';
 import QuizTakeover from './QuizTakeover';
-import TopicCarousel from './TopicCarousel';
+import TopicGrid from './TopicGrid';
 import Sidebar from './Sidebar';
 import { splitIntoCards } from '@/lib/cards';
 import { computeMastery, type MasteryLevel, type TopicMastery } from '@/lib/mastery';
-import { pickTopics, pickProfessionalTopics, type Topic } from '@/lib/topics';
+import { pickTopicSections, pickTopicsForCategory, TOPIC_CATEGORIES, type Topic, type TopicCategory } from '@/lib/topics';
 import { READING_LEVELS, type ReadingLevel } from '@/lib/prompts';
 import {
   type ChatMessage,
@@ -22,13 +23,6 @@ import {
   upsertConversation,
 } from '@/lib/history';
 
-
-function getTimeOfDay() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Morning';
-  if (hour < 17) return 'Afternoon';
-  return 'Evening';
-}
 
 function SendIcon() {
   return (
@@ -59,14 +53,6 @@ function MenuIcon() {
 }
 
 
-function SparkMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
-      <path d="M12 2c.6 4.8 1.9 7.4 4 9 1.5 1.1 3.4 1.7 6 2-2.6.3-4.5.9-6 2-2.1 1.6-3.4 4.2-4 9-.6-4.8-1.9-7.4-4-9-1.5-1.1-3.4-1.7-6-2 2.6-.3 4.5-.9 6-2 2.1-1.6 3.4-4.2 4-9z" />
-    </svg>
-  );
-}
-
 type QuizSource = {
   question: string;
   cards: string[];
@@ -77,13 +63,17 @@ type MasteryNote = {
   after: TopicMastery;
 };
 
+const EMPTY_TOPIC_SECTIONS = Object.fromEntries(
+  TOPIC_CATEGORIES.map((category) => [category, []]),
+) as unknown as Record<TopicCategory, Topic[]>;
+
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  // Gemini is the default content provider — matches the server-side default
+  // OpenAI is the default content provider — matches the server-side default
   // and covers the window before /api/providers resolves (or if it fails).
-  const [provider, setProvider] = useState('gemini');
+  const [provider, setProvider] = useState('openai');
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [readingLevel, setReadingLevel] = useState<ReadingLevel>('high');
   const [showQuizButton, setShowQuizButton] = useState(false);
@@ -101,8 +91,7 @@ export default function Chat() {
     messages: ChatMessage[];
     convId: string;
   } | null>(null);
-  const [visibleTopics, setVisibleTopics] = useState<Topic[]>([]);
-  const [visibleProTopics, setVisibleProTopics] = useState<Topic[]>([]);
+  const [visibleTopics, setVisibleTopics] = useState<Record<TopicCategory, Topic[]>>(EMPTY_TOPIC_SECTIONS);
 
   // Conversation history (localStorage-backed external store)
   const conversations = useSyncExternalStore(
@@ -163,10 +152,12 @@ export default function Chat() {
           setProvider((current) =>
             data.providers.includes(current)
               ? current
-              : data.providers.includes('gemini')
-                ? 'gemini'
+              : data.providers.includes('openai')
+                ? 'openai'
                 : data.providers[0],
           );
+        } else {
+          setError('No AI provider is configured. Add an API key in .env.local.');
         }
       })
       .catch((err) => console.error('Failed to load providers:', err));
@@ -179,11 +170,10 @@ export default function Chat() {
       const saved = localStorage.getItem('recalldeck_reading_level') as ReadingLevel | null;
       if (saved && READING_LEVELS.includes(saved)) {
         setReadingLevel(saved);
-        setVisibleTopics(pickTopics(saved));
+        setVisibleTopics(pickTopicSections(saved));
       } else {
-        setVisibleTopics(pickTopics('high'));
+        setVisibleTopics(pickTopicSections('high'));
       }
-      setVisibleProTopics(pickProfessionalTopics());
     }, 0);
     return () => clearTimeout(timer);
   }, []);
@@ -196,7 +186,17 @@ export default function Chat() {
   const handleReadingLevelChange = (level: ReadingLevel) => {
     setReadingLevel(level);
     localStorage.setItem('recalldeck_reading_level', level);
-    setVisibleTopics(pickTopics(level));
+    setVisibleTopics(pickTopicSections(level));
+  };
+
+  const loadMoreTopics = (category: TopicCategory) => {
+    setVisibleTopics((current) => {
+      const existing = new Set(current[category].map((topic) => topic.prompt));
+      return {
+        ...current,
+        [category]: [...current[category], ...pickTopicsForCategory(category, readingLevel, 5, existing)],
+      };
+    });
   };
 
   // Auto-scroll: always on a newly sent/received message, but during
@@ -506,7 +506,7 @@ export default function Chat() {
   const inputCard = (
     <form
       onSubmit={handleSubmit}
-      className="flex w-full flex-col rounded-lg bg-surface shadow-input"
+      className="flex w-full flex-col rounded-[20px] border border-border-soft bg-surface shadow-input"
     >
       <div className="m-3.5 flex flex-col gap-3">
         <textarea
@@ -523,16 +523,14 @@ export default function Chat() {
             placeholder:text-text-tertiary focus:outline-none"
         />
         <div className="flex items-center justify-between gap-2">
-          <span className="pl-1.5 text-xs text-text-tertiary">
-            Chat with your tutor, then take a pop quiz
-          </span>
+          <span className="pl-1.5 text-xs text-text-tertiary">Your personal study session</span>
           <button
             id="send-btn"
             type="submit"
             disabled={!input.trim() || isStreaming}
             aria-label="Send message"
-            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md
-              bg-accent-strong text-white transition-opacity hover:opacity-90
+            className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full
+              bg-[linear-gradient(135deg,#f97316,#dc2626)] text-white shadow-sm transition-opacity hover:opacity-90
               disabled:pointer-events-none disabled:opacity-50"
           >
             <SendIcon />
@@ -594,37 +592,31 @@ export default function Chat() {
           onReadingLevelChange={handleReadingLevelChange}
         />
 
-        <div
-          className="flex h-dvh min-w-0 flex-1 flex-col"
-        >
+        <div className="flex h-dvh min-w-0 flex-1 flex-col">
           {/* Header */}
-          <header className="sticky top-0 z-20 flex h-[var(--header-height)] shrink-0 items-center justify-between bg-page px-4">
+          <header className="sticky top-0 z-20 flex h-[var(--header-height)] shrink-0 items-center justify-between bg-page px-4 sm:px-5">
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
                 aria-label="Open sidebar"
-                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md
-                  text-text-secondary transition-colors hover:bg-state-hover"
+                className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full
+                  border border-border-soft bg-surface/80 text-text-secondary shadow-sm transition-colors hover:bg-state-hover"
               >
                 <MenuIcon />
               </button>
-              <SparkMark className="h-4 w-4 text-accent" />
-              <span className="font-serif text-lg text-text-primary">Recall Tutor</span>
             </div>
             <div className="flex items-center gap-2">
               {isEmpty ? (
-                <span className="hidden text-xs text-text-tertiary sm:block">
-                  Active recall, one pop quiz at a time
-                </span>
+                <span className="hidden text-xs text-text-tertiary sm:block">Personal study session</span>
               ) : (
                 <button
                   type="button"
                   onClick={handleNewChat}
                   aria-label="Return to home"
                   title="Return to home"
-                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md
-                    text-text-tertiary transition-colors hover:bg-state-hover hover:text-text-primary"
+                  className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full
+                    border border-border-soft bg-surface text-text-tertiary shadow-sm transition-colors hover:bg-state-hover hover:text-text-primary"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
@@ -637,58 +629,36 @@ export default function Chat() {
 
           {isEmpty ? (
             /* Empty state — centered greeting, starters, and input */
-            <main className="flex flex-1 flex-col items-center justify-center gap-8 px-6 pb-16">
+            <main className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto px-6 pb-8 pt-3">
               <div
                 className="inline-flex select-none items-center justify-center gap-3 font-serif text-[34px] font-light leading-[48px] text-text-secondary sm:text-[40px] sm:leading-[60px]"
                 style={{ fontVariationSettings: '"opsz" 48' }}
               >
-                <SparkMark className="h-7 w-7 text-accent sm:h-8 sm:w-8" />
-                <span suppressHydrationWarning>{getTimeOfDay()}, learner</span>
+                <Image
+                  src="/recall-tutor-icon.png"
+                  alt=""
+                  width={64}
+                  height={64}
+                  priority
+                  className="h-14 w-14 rounded-xl"
+                />
+                <span>Recall Tutor</span>
               </div>
 
-              <div className="w-full max-w-[var(--input-max-width)]">
-                {/* Section label — mirrors the Jobs & Careers divider below */}
-                <div className="mb-6 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-border-soft" />
-                  <span className="text-xs font-medium text-text-tertiary">Education</span>
-                  <div className="h-px flex-1 bg-border-soft" />
-                </div>
-
-                <TopicCarousel
-                  topics={visibleTopics}
-                  topicStatus={topicStatus}
-                  idPrefix="seed-prompt"
-                  onSelect={sendMessage}
-                  onLoadMore={() => {
-                    const existing = new Set(visibleTopics.map((t) => t.prompt));
-                    const more = pickTopics(readingLevel, 6, existing);
-                    if (more.length > 0) {
-                      setVisibleTopics((prev) => [...prev, ...more]);
-                    }
-                  }}
-                />
-
-                {/* Divider */}
-                <div className="my-6 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-border-soft" />
-                  <span className="text-xs font-medium text-text-tertiary">Jobs &amp; Careers</span>
-                  <div className="h-px flex-1 bg-border-soft" />
-                </div>
-
-                {/* Professional topics */}
-                <TopicCarousel
-                  topics={visibleProTopics}
-                  topicStatus={topicStatus}
-                  idPrefix="pro-prompt"
-                  onSelect={sendMessage}
-                  onLoadMore={() => {
-                    const existing = new Set(visibleProTopics.map((t) => t.prompt));
-                    const more = pickProfessionalTopics(6, existing);
-                    if (more.length > 0) {
-                      setVisibleProTopics((prev) => [...prev, ...more]);
-                    }
-                  }}
-                />
+              <div className="w-full max-w-[var(--input-max-width)] space-y-5">
+                <p className="text-left text-base text-text-secondary">
+                  Select a topic to learn more about it. You&apos;ll get a mini lecture and a follow-up quiz.
+                </p>
+                {TOPIC_CATEGORIES.map((category) => (
+                  <TopicGrid
+                    key={category}
+                    category={category}
+                    topics={visibleTopics[category]}
+                    topicStatus={topicStatus}
+                    onSelect={sendMessage}
+                    onLoadMore={() => loadMoreTopics(category)}
+                  />
+                ))}
               </div>
 
               <div className="w-full max-w-[var(--input-max-width)]">
@@ -715,6 +685,7 @@ export default function Chat() {
                         showQuizButton={showQuizButton}
                         onQuizMe={handleQuizMe}
                         topic={firstUserMsg?.content}
+                        provider={provider}
                         readingLevel={readingLevel}
                         quizContext={quizContext}
                         answerResult={answerResult}

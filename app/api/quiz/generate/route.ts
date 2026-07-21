@@ -1,5 +1,6 @@
 import { getAnthropicClient, MODELS } from '@/lib/anthropic';
 import { getGeminiClient, GEMINI_MODELS, withGeminiFallback } from '@/lib/gemini';
+import { getOpenAIClient, OPENAI_MODELS } from '@/lib/openai';
 import {
   getQuizGenerationSystemPrompt,
   getQuizGenerationUserPrompt,
@@ -8,7 +9,7 @@ import {
 } from '@/lib/prompts';
 import { QuizQuestionSchema, validateQuizQuestion, QUIZ_QUESTION_JSON_SCHEMA } from '@/lib/schema';
 import { shuffleArray } from '@/lib/shuffle';
-import { resolveProvider } from '@/lib/provider';
+import { getPreferredAvailableProvider, resolveProvider } from '@/lib/provider';
 import { Type } from '@google/genai';
 
 export const runtime = 'nodejs';
@@ -66,9 +67,17 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { transcript, difficulty = 'solid', previousQuestions } = body;
     const provider = resolveProvider(body);
+    const preferredProvider = getPreferredAvailableProvider();
     const readingLevel: ReadingLevel = READING_LEVELS.includes(body.readingLevel)
       ? body.readingLevel
       : 'high';
+
+    if (!preferredProvider) {
+      return new Response(JSON.stringify({ error: 'No AI provider is configured' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     if (!transcript || typeof transcript !== 'string') {
       return new Response(JSON.stringify({ error: 'Transcript is required' }), {
@@ -92,7 +101,7 @@ export async function POST(req: Request) {
 
     let parsed: unknown;
 
-    if (provider === 'gemini') {
+    if (provider === 'gemini' && process.env.GEMINI_API_KEY) {
       const ai = getGeminiClient();
 
       const response = await withGeminiFallback(GEMINI_MODELS.QUIZ_GENERATE, (model) =>
@@ -118,8 +127,38 @@ export async function POST(req: Request) {
       }
 
       parsed = JSON.parse(responseText);
+    } else if (provider === 'openai' && process.env.OPENAI_API_KEY) {
+      const client = getOpenAIClient();
+
+      const response = await client.responses.create({
+        model: OPENAI_MODELS.QUIZ_GENERATE,
+        instructions: getQuizGenerationSystemPrompt(difficulty as 'warmup' | 'solid' | 'tricky', readingLevel),
+        input: getQuizGenerationUserPrompt(transcript, validatedPreviousQuestions),
+        max_output_tokens: 1024,
+        store: false,
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'quiz_question',
+            schema: QUIZ_QUESTION_JSON_SCHEMA,
+            strict: true,
+          },
+        },
+      });
+
+      if (!response.output_text) {
+        throw new Error('No text content in OpenAI response');
+      }
+
+      parsed = JSON.parse(response.output_text);
     } else {
       // Anthropic
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return new Response(JSON.stringify({ error: 'Anthropic is not configured' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       const client = getAnthropicClient();
 
       const response = await client.messages.create({

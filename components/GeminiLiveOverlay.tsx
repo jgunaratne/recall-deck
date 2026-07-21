@@ -74,6 +74,16 @@ function MicOffIcon() {
   );
 }
 
+function ErrorIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+
 function PulseRing({ active }: { active: boolean }) {
   if (!active) return null;
   return (
@@ -544,10 +554,18 @@ export default function GeminiLiveOverlay({
       {/* Error indicator */}
       {error && (
         <span
-          className="max-w-[120px] truncate text-[10px] text-danger"
-          title={error}
+          role="img"
+          aria-label={`Voice tutor error: ${error}`}
+          tabIndex={0}
+          className="group relative flex h-6 w-6 shrink-0 cursor-help items-center justify-center rounded-full text-danger hover:bg-danger/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger"
         >
-          {error}
+          <ErrorIcon />
+          <span
+            role="tooltip"
+            className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 w-64 rounded-md bg-text-primary px-3 py-2 text-left text-xs leading-4 text-surface opacity-0 shadow-popover transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          >
+            {error}
+          </span>
         </span>
       )}
     </div>
